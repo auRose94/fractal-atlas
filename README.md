@@ -19,8 +19,20 @@ all in a single file: `index.html` (raw WebGL2, no dependencies, no build step).
   the sheet; zoom in along its boundary to find the hull ribs.
 - **Hybrid: Bulb × Box** — a mandelbulb orbit with a mandelbox fold + scale
   injected every Nth iteration. Power and box scale both live; from "bulb with
-  box bark" to a spherical debris nebula with spiral-galaxy cores. See
-  [ROADMAP.md](ROADMAP.md) for what's next (4-D fly-through, new families, 5-D).
+  box bark" to a spherical debris nebula with spiral-galaxy cores.
+- **Hybrid: Julia × Box** and **Hybrid: Ship × Box** — the same fold injection
+  applied to the quaternion Julia and Burning Ship orbits (origami terracing;
+  a compass-rose medallion).
+- **Tricorn 4D** — the conjugate-fold Mandelbrot variant (`z → z̄² + c`) in
+  quaternions; braided-rope symmetry.
+- **Rosebulb** — invented for this atlas: the bulb power wobbles with orbit
+  azimuth, melting the symmetric lobes into organic caramel drapery.
+- **Fly-through** (drawer, quat modes) — continuous travel through the fourth
+  dimension with a speed slider and soft bounce; combine with auto-rotate for
+  auto-pilot recordings.
+
+See [ROADMAP.md](ROADMAP.md) for the full queue (Kleinian, Apollonian, KIFS,
+and 5-D are next).
 
 ## Run it
 

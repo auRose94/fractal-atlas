@@ -109,11 +109,16 @@
       <option value="3">Mandelbrot 4D (slice)</option>
       <option value="4">Burning Ship 4D (experimental)</option>
       <option value="5">Hybrid: Bulb × Box</option>
+      <option value="6">Hybrid: Julia × Box</option>
+      <option value="7">Hybrid: Ship × Box</option>
+      <option value="8">Tricorn 4D</option>
+      <option value="9">Rosebulb (angle power)</option>
     </select>
   </div>
   <div class="row" id="rowPower"><label>Power <span id="vPower">8.00</span></label><input id="sPower" type="range" min="2" max="12" step="0.05" value="8"></div>
   <div class="row" id="rowScale" style="display:none"><label>Scale <span id="vScale">-1.50</span></label><input id="sScale" type="range" min="-3" max="3" step="0.05" value="-1.5"></div>
   <div class="row" id="rowBoxN" style="display:none"><label>Box fold every <span id="vBoxN">2</span> iters</label><input id="sBoxN" type="range" min="1" max="4" step="1" value="2"></div>
+  <div class="row" id="rowWobble" style="display:none"><label>Angle wobble <span id="vWobble">1.50</span></label><input id="sWobble" type="range" min="0" max="3" step="0.05" value="1.5"></div>
   <div class="row" id="rowJulia" style="display:none"><label>Constant c</label>
     <select id="selJC">
       <option value="0">Crane</option>
@@ -158,6 +163,10 @@
       <div class="row" id="rowElev" style="display:none"><label>Slice elevation <span id="vElev">0.00</span></label><input id="sElev" type="range" min="-1.5" max="1.5" step="0.01" value="0"></div>
       <div class="row" id="rowTilt" style="display:none"><label>Slice tilt (Alt+drag) <span id="vTilt">0.00</span></label><input id="sTilt" type="range" min="0" max="3.14" step="0.01" value="0"></div>
       <div class="row" id="rowSlice" style="display:none"><label>Slice w (Alt+drag / Alt+wheel) <span id="vSlice">0.00</span></label><input id="sSlice" type="range" min="-3" max="3" step="0.01" value="0"></div>
+      <div class="checks" id="rowFly" style="display:none">
+        <label><input type="checkbox" id="cbFly"> Fly-through (4D travel)</label>
+      </div>
+      <div class="row" id="rowFlySpeed" style="display:none"><label>Fly speed <span id="vFly">0.12</span></label><input id="sFly" type="range" min="0.02" max="0.6" step="0.01" value="0.12"></div>
       <div class="checks">
         <label><input type="checkbox" id="cbCut"> Cutaway</label>
       </div>
@@ -185,6 +194,7 @@ uniform float uTime;
 uniform vec3  uCamPos;
 uniform vec3  uCamTarget;
 uniform float uPower;
+uniform float uAmp;        // rosebulb: power wobble amplitude with orbit angle
 uniform int   uIters;
 uniform float uDetail;
 uniform int   uPalette;
@@ -247,11 +257,14 @@ float bulbDE(vec3 p, out float trap, out float iterF) {
     r = length(z);
     if (r > BAIL) break;
     trap = min(trap, r);
-    float theta = acos(clamp(z.z / max(r, 1e-9), -1.0, 1.0)) * uPower;
-    float phi   = atan(z.y, z.x) * uPower;
-    dr = pow(r, uPower - 1.0) * uPower * dr + 1.0;
+    // rosebulb: power wobbles with orbit azimuth (mode 9)
+    float pe = uPower + ((uFractal == 9) ? uAmp * sin(2.0 * atan(z.y, z.x)) : 0.0);
+    pe = max(pe, 1.2);
+    float theta = acos(clamp(z.z / max(r, 1e-9), -1.0, 1.0)) * pe;
+    float phi   = atan(z.y, z.x) * pe;
+    dr = pow(r, pe - 1.0) * pe * dr + 1.0;
     if (dr > 1e12) break;
-    float zr = pow(r, uPower);
+    float zr = pow(r, pe);
     float st = sin(theta), ct = cos(theta);
     z = zr * vec3(st * cos(phi), st * sin(phi), ct) + p;
     trap = min(trap, length(z));
@@ -292,20 +305,32 @@ vec4 slicePoint(vec3 p) {
 float quatDE(vec3 p, out float trap, out float iterF) {
   vec4 q0 = slicePoint(p);
   vec4 z, c;
-  if (uFractal == 2) { z = q0; c = uCQuat; }
-  else { z = q0; c = z; }                                          // mandelbrot/ship: seed with first step (z0 = 0)
+  if (uFractal == 2 || uFractal == 6) { z = q0; c = uCQuat; }
+  else { z = q0; c = z; }                          // mandelbrot/ship/tricorn: seed z with c (z0 = 0)
   vec4 dz = vec4(1.0, 0.0, 0.0, 0.0);
   float r = length(z);
   trap = 1e9;
   int i;
   for (i = 0; i < 64; i++) {
     if (i >= uIters) break;
-    if (uFractal == 4) z.x = abs(z.x);   // burning-ship fold on the real axis
+    if (uFractal == 4 || uFractal == 7) z.x = abs(z.x);          // burning-ship fold
+    if (uFractal == 8) z = vec4(z.x, -z.y, -z.z, -z.w);          // tricorn conjugate fold
     dz = 2.0 * qmul(z, dz);
     z = qmul(z, z) + c;
     r = length(z);
     if (r > 4.0) break;
     trap = min(trap, r);
+    if ((uFractal == 6 || uFractal == 7) && uBoxEvery >= 1 && (i % uBoxEvery) == (uBoxEvery - 1)) {
+      // hybrid fold injection: box fold (isometry) then sphere fold then scale
+      z = clamp(z, -1.0, 1.0) * 2.0 - z;
+      float r2 = dot(z, z);
+      float m = clamp(1.0 / max(r2, 0.25), 1.0, 4.0);
+      z *= m;
+      dz *= m;
+      z = uScale * z;
+      dz *= abs(uScale);
+      trap = min(trap, length(z));
+    }
   }
   iterF = float(i);
   r = max(r, 1e-9);
@@ -440,15 +465,24 @@ float march(vec3 ro, vec3 rd, out float trap, out float iterF, out float glowAcc
 // get their own high-iteration pass — this is what makes slice photos crisp.
 vec3 cutColorQ(vec4 q0) {
   vec4 z = q0;
-  vec4 c = (uFractal == 2) ? uCQuat : q0;
+  vec4 c = (uFractal == 2 || uFractal == 6) ? uCQuat : q0;
   float trap = 1e9;
   int i;
   for (i = 0; i < 128; i++) {
-    if (uFractal == 4) z.x = abs(z.x);
+    if (uFractal == 4 || uFractal == 7) z.x = abs(z.x);
+    if (uFractal == 8) z = vec4(z.x, -z.y, -z.z, -z.w);
     z = qmul(z, z) + c;
     float r = length(z);
     if (r > 4.0) break;
     trap = min(trap, r);
+    if ((uFractal == 6 || uFractal == 7) && uBoxEvery >= 1 && (i % uBoxEvery) == (uBoxEvery - 1)) {
+      z = clamp(z, -1.0, 1.0) * 2.0 - z;
+      float r2 = dot(z, z);
+      float m = clamp(1.0 / max(r2, 0.25), 1.0, 4.0);
+      z *= m;
+      z = uScale * z;
+      trap = min(trap, length(z));
+    }
   }
   float tc = (uColorMode == 0)
     ? 0.15 + 0.85 * sqrt(clamp(trap * 0.85, 0.0, 1.0))
@@ -577,19 +611,23 @@ if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { fail('Program link error:\n
 gl.useProgram(prog);
 gl.bindVertexArray(gl.createVertexArray());
 
-const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uBoxEvery','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
+const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uAmp','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uBoxEvery','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
 const U = {};
 for (const n of UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
 
 // ---------------------------------------------------------------- state
-const TITLES = ['MANDELBULB', 'MANDELBOX', 'QUATERNION JULIA', 'MANDELBROT 4D', 'BURNING SHIP 4D', 'HYBRID BULB × BOX'];
+const TITLES = ['MANDELBULB', 'MANDELBOX', 'QUATERNION JULIA', 'MANDELBROT 4D', 'BURNING SHIP 4D', 'HYBRID BULB × BOX', 'JULIA × BOX', 'SHIP × BOX', 'TRICORN 4D', 'ROSEBULB'];
 const FORMULAS = [
   'z → zⁿ + c \u00a0·\u00a0 the classic 3-D power extension',
   'box-fold → sphere-fold → scale \u00a0·\u00a0 architecture from a map',
   'z → z² + c with c frozen \u00a0·\u00a0 a 3-D slice of a 4-D set',
   'z → z² + c with c = the point \u00a0·\u00a0 the 4-D Mandelbrot body, sliced at w',
   'z → (|Re z| + Im z)² + c \u00a0·\u00a0 the ship, extended into quaternions',
-  'bulb step + box fold every Nth \u00a0·\u00a0 two classics sharing one orbit'
+  'bulb step + box fold every Nth \u00a0·\u00a0 two classics sharing one orbit',
+  'julia orbit + box folds injected \u00a0·\u00a0 origami in four dimensions',
+  'ship orbit + box folds injected \u00a0·\u00a0 the hull, refolded',
+  'z → z̄² + c \u00a0·\u00a0 the tricorn, four dimensions deep',
+  'z → z^p(θ) + c \u00a0·\u00a0 the power wobbles with orbit angle'
 ];
 const HOMES = [
   { yaw: 0.65, pitch: 0.30, dist: 3.1 },
@@ -597,7 +635,11 @@ const HOMES = [
   { yaw: 0.65, pitch: 0.25, dist: 3.5 },
   { yaw: 0.65, pitch: 0.30, dist: 3.4 },
   { yaw: 0.0, pitch: 0.0, dist: 4.4, tx: -0.9, ty: -0.4, tz: 0, center: [-0.9, -0.4, 0] },
-  { yaw: 0.65, pitch: 0.30, dist: 3.4 }
+  { yaw: 0.65, pitch: 0.30, dist: 3.4 },
+  { yaw: 0.65, pitch: 0.25, dist: 3.5 },
+  { yaw: 0.0, pitch: 0.0, dist: 4.4, tx: -0.9, ty: -0.4, tz: 0, center: [-0.9, -0.4, 0] },
+  { yaw: 0.65, pitch: 0.30, dist: 3.4 },
+  { yaw: 0.55, pitch: 0.30, dist: 3.2 }
 ];
 const JULIA_C = [
   [-0.2,  0.6,  0.2,  0.2 ],   // Crane
@@ -613,6 +655,7 @@ const S = {
   palette: 0, colorMode: 0,
   scale: -1.5, boxEvery: 2, juliaPreset: 0, sliceH: 0, sliceTilt: 0, sliceAzim: 0, sliceElev: 0,
   cutaway: false, clipFrac: 0.55, center: [0, 0, 0],
+  amp: 1.5, fly: false, flySpeed: 0.12, flyDir: 1,
   shadows: true, autoRes: true, autoRot: true, morph: false,
   yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist,
   tx: 0, ty: 0, tz: 0,
@@ -636,6 +679,8 @@ function bindSlider(id, labelId, key, fmt, onSet) {
 const sPower = bindSlider('sPower', 'vPower', 'power', v => v.toFixed(2), () => setMorph(false));
 const sScale = bindSlider('sScale', 'vScale', 'scale', v => v.toFixed(2), () => setMorph(false));
 const sBoxN = bindSlider('sBoxN', 'vBoxN', 'boxEvery', v => String(v | 0));
+const sWobble = bindSlider('sWobble', 'vWobble', 'amp', v => v.toFixed(2));
+const sFly = bindSlider('sFly', 'vFly', 'flySpeed', v => v.toFixed(2));
 const sSlice = bindSlider('sSlice', 'vSlice', 'sliceH', v => v.toFixed(2), () => setMorph(false));
 const sTilt  = bindSlider('sTilt',  'vTilt',  'sliceTilt', v => v.toFixed(2));
 const sAzim  = bindSlider('sAzim',  'vAzim',  'sliceAzim', v => v.toFixed(2));
@@ -654,6 +699,7 @@ $('cbShad').addEventListener('change', e => S.shadows = e.target.checked);
 $('cbAuto').addEventListener('change', e => S.autoRes = e.target.checked);
 $('cbMorph').addEventListener('change', e => setMorph(e.target.checked));
 $('cbCut').addEventListener('change', e => S.cutaway = e.target.checked);
+$('cbFly').addEventListener('change', e => S.fly = e.target.checked);
 $('btnDrawer').addEventListener('click', () => document.body.classList.toggle('drawerClosed'));
 
 function setMorph(on) {
@@ -671,13 +717,16 @@ function refreshHeader() {
   $('formula').textContent = FORMULAS[S.fractal];
 }
 
+const isQuat = f => (f === 2 || f === 3 || f === 4 || f === 6 || f === 7 || f === 8);
+
 function updateRows() {
-  $('rowPower').style.display = (S.fractal === 0 || S.fractal === 5) ? '' : 'none';
-  $('rowScale').style.display = (S.fractal === 1 || S.fractal === 5) ? '' : 'none';
-  $('rowBoxN').style.display = S.fractal === 5 ? '' : 'none';
-  $('rowJulia').style.display = S.fractal === 2 ? '' : 'none';
-  const quatMode = S.fractal >= 2 && S.fractal <= 4;
-  for (const id of ['rowAzim', 'rowElev', 'rowTilt', 'rowSlice']) {
+  $('rowPower').style.display = (S.fractal === 0 || S.fractal === 5 || S.fractal === 9) ? '' : 'none';
+  $('rowScale').style.display = (S.fractal === 1 || S.fractal === 5 || S.fractal === 6 || S.fractal === 7) ? '' : 'none';
+  $('rowBoxN').style.display = (S.fractal === 5 || S.fractal === 6 || S.fractal === 7) ? '' : 'none';
+  $('rowWobble').style.display = S.fractal === 9 ? '' : 'none';
+  $('rowJulia').style.display = (S.fractal === 2 || S.fractal === 6) ? '' : 'none';
+  const quatMode = isQuat(S.fractal);
+  for (const id of ['rowAzim', 'rowElev', 'rowTilt', 'rowSlice', 'rowFly', 'rowFlySpeed']) {
     $(id).style.display = quatMode ? '' : 'none';
   }
 }
@@ -692,7 +741,7 @@ function syncSliceUI() {
 
 function setFractal(f) {
   S.fractal = f;
-  const iters = { 0: 14, 1: 16, 2: 12, 3: 14, 4: 14, 5: 14 }[f];
+  const iters = { 0: 14, 1: 16, 2: 12, 3: 14, 4: 14, 5: 14, 6: 12, 7: 14, 8: 14, 9: 14 }[f];
   S.iters = iters; sIters.value = iters; $('vIters').textContent = String(iters);
   S.sliceH = 0; S.sliceTilt = 0; S.sliceAzim = 0; S.sliceElev = 0;
   syncSliceUI();
@@ -864,7 +913,11 @@ function typeParams() {
     const bound = Math.max(2.0, Math.abs(S.scale) * 2.2 + 0.8, Math.abs(S.cscale) * 2.2 + 0.8);
     return { bound, scene: HOMES[5].dist / 3.1, fog: 0.015 * Math.pow(3.1 / HOMES[5].dist, 2) };
   }
-  const bound = (S.fractal === 0) ? 1.5 : 2.3;
+  if (S.fractal === 6 || S.fractal === 7) {
+    const home = HOMES[S.fractal];
+    return { bound: 2.6, scene: home.dist / 3.1, fog: 0.015 * Math.pow(3.1 / home.dist, 2) };
+  }
+  const bound = (S.fractal === 0 || S.fractal === 9) ? 1.5 : 2.3;
   const home = HOMES[S.fractal];
   return { bound, scene: home.dist / 3.1, fog: 0.015 * Math.pow(3.1 / home.dist, 2) };
 }
@@ -895,7 +948,7 @@ function frame(now) {
   if (S.autoRot && !dragging) S.yaw += dt * 0.15;
   if (S.morph) {
     const t = now * 0.00035;
-    if (S.fractal === 0) {
+    if (S.fractal === 0 || S.fractal === 9) {
       S.power = 6 + 4 * Math.sin(t);
       sPower.value = S.power;
       $('vPower').textContent = S.power.toFixed(2);
@@ -903,12 +956,21 @@ function frame(now) {
       S.scale = -1.5 + 0.4 * Math.sin(t * 1.1);
       sScale.value = S.scale;
       $('vScale').textContent = S.scale.toFixed(2);
-    } else if (S.fractal >= 3) {
+    } else if (S.fractal >= 3 && S.fractal !== 6 && !S.fly) {
       S.sliceH = 0.4 * Math.sin(t * 0.8);
       sSlice.value = S.sliceH;
       $('vSlice').textContent = S.sliceH.toFixed(2);
     }
-    // fractal 2 (julia) morphs c via juliaCTarget()
+    // fractals 2/6 (julia) morph c via juliaCTarget()
+  }
+
+  // true 4D fly-through: continuous travel along the slice normal, soft bounce
+  if (S.fly && isQuat(S.fractal)) {
+    S.sliceH += S.flyDir * S.flySpeed * dt;
+    if (S.sliceH > 2.4) { S.sliceH = 2.4; S.flyDir = -1; }
+    else if (S.sliceH < -2.4) { S.sliceH = -2.4; S.flyDir = 1; }
+    sSlice.value = S.sliceH;
+    $('vSlice').textContent = S.sliceH.toFixed(2);
   }
 
   const k = 1 - Math.exp(-dt * 10);
@@ -951,6 +1013,7 @@ function frame(now) {
     S.ctz + S.cdist * cp * cy);
   gl.uniform3f(U.uCamTarget, S.ctx, S.cty, S.ctz);
   gl.uniform1f(U.uPower, S.cpow);
+  gl.uniform1f(U.uAmp, S.amp);
   gl.uniform1i(U.uIters, S.iters | 0);
   gl.uniform1f(U.uDetail, S.detail);
   gl.uniform1i(U.uPalette, S.palette);
