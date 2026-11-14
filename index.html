@@ -161,6 +161,11 @@
     </select>
     <input id="sSeqN3" type="range" min="1" max="6" step="1" value="2" title="steps per cycle">
   </div>
+  <div class="row seqrow" id="rowSeqOff" style="display:none"><label>Offset</label>
+    <input id="sOffX" type="range" min="-2" max="2" step="0.01" value="0.875" title="offset X">
+    <input id="sOffY" type="range" min="-2" max="2" step="0.01" value="0.875" title="offset Y">
+    <input id="sOffZ" type="range" min="-2" max="2" step="0.01" value="0.875" title="offset Z">
+  </div>
   <div class="row" id="rowJulia" style="display:none"><label>Constant c</label>
     <select id="selJC">
       <option value="0">Crane</option>
@@ -196,6 +201,7 @@
   </div>
   <div class="btns">
     <button id="btnShot">Screenshot</button>
+    <button id="btnLink">Copy link</button>
     <button id="btnReset">Reset view</button>
   </div>
   <div id="drawer">
@@ -252,6 +258,7 @@ uniform int   uSeqC;
 uniform int   uSeqNA;      // sequencer per-slot step counts
 uniform int   uSeqNB;
 uniform int   uSeqNC;
+uniform vec3  uSeqOff;     // sequencer: offset applied to the polynomial slots' +p
 uniform float uScale;      // mandelbox scale / KIFS scale
 uniform float uRotA;       // KIFS twist angle per iteration
 uniform float uInvK;       // Apollonian inversion constant
@@ -487,17 +494,19 @@ vec3 seqApply(int slot, vec3 z, inout float dr, vec3 p) {
     dr = dr * abs(uScale) + 1.0;
   } else if (slot == 2) {
     float g = max(length(z), 0.1);
-    z = z * z + p;
+    z = z * z + p - uSeqOff;   // per-axis square; offset centers the map
     dr = dr * 2.0 * g + 1.0;
   } else if (slot == 3) {
-    z.x = abs(z.x);
+    // ship: fold the real axis, then quaternion-square (cross-terms!)
+    vec3 w = vec3(abs(z.x), z.y, z.z);
     float g = max(length(z), 0.1);
-    z = z * z + p;
+    z = vec3(w.x*w.x - w.y*w.y - w.z*w.z, 2.0*w.x*w.y, 2.0*w.x*w.z) + p - uSeqOff;
     dr = dr * 2.0 * g + 1.0;
   } else if (slot == 4) {
-    z = vec3(z.x, -z.y, -z.z);
+    // tricorn: conjugate, then quaternion-square
+    vec3 w = vec3(z.x, -z.y, -z.z);
     float g = max(length(z), 0.1);
-    z = z * z + p;
+    z = vec3(w.x*w.x - w.y*w.y - w.z*w.z, 2.0*w.x*w.y, 2.0*w.x*w.z) + p - uSeqOff;
     dr = dr * 2.0 * g + 1.0;
   } else {
     z = 2.0 * clamp(z, -1.0, 1.0) - z;   // mirror isometry: derivative unchanged
@@ -768,7 +777,7 @@ if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { fail('Program link error:\n
 gl.useProgram(prog);
 gl.bindVertexArray(gl.createVertexArray());
 
-const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uAmp','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uRotA','uInvK','uBoxEvery','uSeqA','uSeqB','uSeqC','uSeqNA','uSeqNB','uSeqNC','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
+const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uAmp','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uRotA','uInvK','uBoxEvery','uSeqA','uSeqB','uSeqC','uSeqNA','uSeqNB','uSeqNC','uSeqOff','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
 const U = {};
 for (const n of UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
 
@@ -821,6 +830,7 @@ const S = {
   amp: 1.5, fly: false, flySpeed: 0.12, flyDir: 1,
   rotA: 0.30, invK: 1.0, renderDist: 1.0,
   seqA: 0, seqB: 1, seqC: 2, seqNA: 2, seqNB: 1, seqNC: 2,
+  seqOff: [0.875, 0.875, 0.875],
   shadows: true, autoRes: true, autoRot: true, morph: false,
   yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist,
   tx: 0, ty: 0, tz: 0,
@@ -866,6 +876,9 @@ $('selJC').addEventListener('change', e => S.juliaPreset = e.target.value | 0);
 $('selSeq1').addEventListener('change', e => S.seqA = e.target.value | 0);
 $('selSeq2').addEventListener('change', e => S.seqB = e.target.value | 0);
 $('selSeq3').addEventListener('change', e => S.seqC = e.target.value | 0);
+for (const [id, idx] of [['sOffX', 0], ['sOffY', 1], ['sOffZ', 2]]) {
+  $(id).addEventListener('input', e => S.seqOff[idx] = parseFloat(e.target.value));
+}
 $('selPal').addEventListener('change', e => S.palette = e.target.value | 0);
 $('selMode').addEventListener('change', e => S.colorMode = e.target.value | 0);
 $('cbRot').addEventListener('change', e => S.autoRot = e.target.checked);
@@ -902,7 +915,7 @@ function updateRows() {
   $('rowInvert').style.display = S.fractal === 11 ? '' : 'none';
   $('rowJulia').style.display = (S.fractal === 2 || S.fractal === 6) ? '' : 'none';
   const seqMode = S.fractal === 12;
-  for (const id of ['rowSeq1', 'rowSeq2', 'rowSeq3']) {
+  for (const id of ['rowSeq1', 'rowSeq2', 'rowSeq3', 'rowSeqOff']) {
     $(id).style.display = seqMode ? '' : 'none';
   }
   const quatMode = isQuat(S.fractal);
@@ -953,6 +966,107 @@ $('panelTab').addEventListener('click', () => setUIMode('normal'));
 
 let wantShot = false;
 $('btnShot').addEventListener('click', () => wantShot = true);
+
+// ---------------------------------------------------------------- deep links
+// Every creature gets a URL: full state serializes into location.hash,
+// restored on load. Share via the Copy link button.
+const HASH_FIELDS = [
+  ['f','fractal','int'], ['pw','power','float'], ['sc','scale','float'], ['bn','boxEvery','int'],
+  ['i','iters','int'], ['d','detail','float'], ['g','glow','float'], ['pa','palette','int'],
+  ['cm','colorMode','int'], ['sh','shadows','bool'], ['rr','renderDist','float'],
+  ['amp','amp','float'], ['ra','rotA','float'], ['ik','invK','float'],
+  ['q1','seqA','int'], ['q2','seqB','int'], ['q3','seqC','int'],
+  ['n1','seqNA','int'], ['n2','seqNB','int'], ['n3','seqNC','int'],
+  ['ox','seqOffX','float'], ['oy','seqOffY','float'], ['oz','seqOffZ','float'],
+  ['sw','sliceH','float'], ['st','sliceTilt','float'], ['sa','sliceAzim','float'], ['se','sliceElev','float'],
+  ['cw','cutaway','bool'], ['cf','clipFrac','float'], ['fl','fly','bool'],
+  ['yw','yaw','float'], ['pt','pitch','float'], ['ds','dist','float'],
+  ['tx','tx','float'], ['ty','ty','float'], ['tz','tz','float'], ['ar','autoRot','bool']
+];
+const OFF_IDX = { X: 0, Y: 1, Z: 2 };
+
+function stateGet(key) {
+  if (key.startsWith('seqOff')) return S.seqOff[OFF_IDX[key.slice(6)]];
+  return S[key];
+}
+function stateSet(key, v) {
+  if (key.startsWith('seqOff')) { S.seqOff[OFF_IDX[key.slice(6)]] = v; return; }
+  S[key] = v;
+}
+const UI_FOR = {
+  fractal: ['selFrac','change'], power: ['sPower','input'], scale: ['sScale','input'],
+  boxEvery: ['sBoxN','input'], iters: ['sIters','input'], detail: ['sDetail','input'],
+  glow: ['sGlow','input'], palette: ['selPal','change'], colorMode: ['selMode','change'],
+  shadows: ['cbShad','change'], renderDist: ['sRender','input'], amp: ['sWobble','input'],
+  rotA: ['sRot','input'], invK: ['sInv','input'],
+  seqA: ['selSeq1','change'], seqB: ['selSeq2','change'], seqC: ['selSeq3','change'],
+  seqNA: ['sSeqN1','input'], seqNB: ['sSeqN2','input'], seqNC: ['sSeqN3','input'],
+  sliceH: ['sSlice','input'], sliceTilt: ['sTilt','input'],
+  sliceAzim: ['sAzim','input'], sliceElev: ['sElev','input'],
+  cutaway: ['cbCut','change'], clipFrac: ['sCut','input'], fly: ['cbFly','change'],
+  autoRot: ['cbRot','change']
+};
+
+function hashString() {
+  const q = new URLSearchParams();
+  for (const [k, key] of HASH_FIELDS) q.set(k, String(stateGet(key)));
+  return q.toString();
+}
+
+function applyHash() {
+  if (location.hash.length < 2) return false;
+  const q = new URLSearchParams(location.hash.slice(1));
+  let any = false;
+  for (const [k, key, kind] of HASH_FIELDS) {
+    if (!q.has(k)) continue;
+    const raw = q.get(k);
+    let v;
+    if (kind === 'int') v = parseInt(raw, 10);
+    else if (kind === 'bool') v = raw === 'true';
+    else v = parseFloat(raw);
+    if (Number.isNaN(v)) continue;
+    stateSet(key, v);
+    any = true;
+  }
+  return any;
+}
+
+function syncAllUI() {
+  for (const key in UI_FOR) {
+    const [id, ev] = UI_FOR[key];
+    const el = $(id);
+    if (!el) continue;
+    const v = stateGet(key);
+    if (el.type === 'checkbox') el.checked = !!v;
+    else el.value = String(v);
+    el.dispatchEvent(new Event(ev));
+  }
+  $('sOffX').value = S.seqOff[0]; $('sOffY').value = S.seqOff[1]; $('sOffZ').value = S.seqOff[2];
+  syncSliceUI();
+  // snap smoothed camera values so a shared link opens exactly where it was captured
+  S.cyaw = S.yaw; S.cpitch = S.pitch; S.cdist = S.dist;
+  S.ctx = S.tx; S.cty = S.ty; S.ctz = S.tz;
+  S.cpow = S.power; S.cscale = S.scale; S.cH = S.sliceH;
+  S.cTilt = S.sliceTilt; S.cAzim = S.sliceAzim; S.cElev = S.sliceElev;
+  S.cQuat = juliaCTarget().slice();
+  updateRows();
+  refreshHeader();
+}
+
+$('btnLink').addEventListener('click', () => {
+  location.hash = hashString();
+  const done = () => { $('btnLink').textContent = 'Copied!'; setTimeout(() => $('btnLink').textContent = 'Copy link', 1200); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(location.href).then(done, done);
+  else done();
+});
+
+if (applyHash()) { syncAllUI(); }
+else { updateRows(); }
+
+// hash navigation (shared links opened on an already-live page, back/forward)
+window.addEventListener('hashchange', () => {
+  if (applyHash()) syncAllUI();
+});
 
 // ---------------------------------------------------------------- input
 const pointers = new Map();
@@ -1140,6 +1254,7 @@ let prev = performance.now();
 let fpsEma = 60;
 let dynScale = 0.8;
 let lastAdapt = 0, lastHud = 0;
+let lastHash = hashString(), lastHashT = 0;
 
 function frame(now) {
   const dt = clampN((now - prev) / 1000, 1e-4, 0.1);
@@ -1240,6 +1355,7 @@ function frame(now) {
   gl.uniform1i(U.uSeqNA, Math.round(S.seqNA));
   gl.uniform1i(U.uSeqNB, Math.round(S.seqNB));
   gl.uniform1i(U.uSeqNC, Math.round(S.seqNC));
+  gl.uniform3f(U.uSeqOff, S.seqOff[0], S.seqOff[1], S.seqOff[2]);
   gl.uniform4f(U.uCQuat, S.cQuat[0], S.cQuat[1], S.cQuat[2], S.cQuat[3]);
   const [sN, sE1, sE2, sE3] = sliceBasis(S.cTilt, S.cAzim, S.cElev);
   gl.uniform1f(U.uSliceH, S.cH);
@@ -1267,6 +1383,16 @@ function frame(now) {
   if (now - lastHud > 250) {
     lastHud = now;
     fpsEl.textContent = Math.round(fpsEma) + ' fps \u00b7 ' + canvas.width + '\u00d7' + canvas.height;
+  }
+
+  // keep the shareable deep-link in sync (once per second, replaceState: no history spam)
+  if (now - lastHashT > 1000) {
+    lastHashT = now;
+    const h = hashString();
+    if (h !== lastHash) {
+      lastHash = h;
+      history.replaceState(null, '', '#' + h);
+    }
   }
   requestAnimationFrame(frame);
 }

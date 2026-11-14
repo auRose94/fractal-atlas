@@ -15,8 +15,15 @@ The exploration queue for the Fractal Atlas, roughly in build order.
   (Bulb / Box / per-axis Square / Ship / Tricorn / Mirror), each with its own
   step count, applied cyclically with derivative tracking. One remix turned
   into a glassy ice-cube with a carved lens staring out of its face.
-- Queued: preset sharing for sequencer formulas (URL deep-links), more slot
-  types (inversion folds, sine bends).
+  - **Offset modifier** (shipped): XYZ offset applied to the polynomial slots
+    (`Square`/`Ship`/`Tricorn`), pre-centered at 0.875 so the quadratic maps'
+    natural region sits at the origin — symmetric creatures by default,
+    off-center "best of both worlds" on demand.
+  - **Deep-links** (shipped): full state (formula, camera, palette, everything)
+    serializes into the URL hash and restores on load — every creature has a
+    shareable URL. Copy link button included.
+- Queued: more slot types (inversion folds, sine bends), sequencer preset
+  gallery page.
 
 ## 2. True 4D fly-through — shipped
 - **Fly-through** toggle (drawer, quat modes): continuous travel along the 4-D
