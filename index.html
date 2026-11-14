@@ -8,7 +8,7 @@
 <meta property="og:title" content="Fractal Atlas">
 <meta property="og:description" content="Fly through the Mandelbulb, Mandelbox, Quaternion Julia, and raymarched 3-D slices of the 4-D Mandelbrot — real-time, in your browser.">
 <meta property="og:type" content="website">
-<title>Fractal Atlas — Mandelbulb · Mandelbox · Quaternion Julia · 4D Mandelbrot · Burning Ship</title>
+<title>Fractal Atlas — Mandelbulb · Mandelbox · Quaternion Julia · 4D Mandelbrot · Burning Ship · Hybrid</title>
 <style>
   :root {
     --glass: rgba(16, 18, 28, 0.82);
@@ -108,10 +108,12 @@
       <option value="2">Quaternion Julia</option>
       <option value="3">Mandelbrot 4D (slice)</option>
       <option value="4">Burning Ship 4D (experimental)</option>
+      <option value="5">Hybrid: Bulb × Box</option>
     </select>
   </div>
   <div class="row" id="rowPower"><label>Power <span id="vPower">8.00</span></label><input id="sPower" type="range" min="2" max="12" step="0.05" value="8"></div>
   <div class="row" id="rowScale" style="display:none"><label>Scale <span id="vScale">-1.50</span></label><input id="sScale" type="range" min="-3" max="3" step="0.05" value="-1.5"></div>
+  <div class="row" id="rowBoxN" style="display:none"><label>Box fold every <span id="vBoxN">2</span> iters</label><input id="sBoxN" type="range" min="1" max="4" step="1" value="2"></div>
   <div class="row" id="rowJulia" style="display:none"><label>Constant c</label>
     <select id="selJC">
       <option value="0">Crane</option>
@@ -190,6 +192,7 @@ uniform int   uColorMode;
 uniform float uGlow;
 uniform int   uShadows;
 uniform int   uFractal;    // 0 bulb, 1 box, 2 quaternion julia, 3 mandelbrot 4D slice
+uniform int   uBoxEvery;   // hybrid: inject a mandelbox fold every Nth iteration
 uniform float uScale;      // mandelbox scale
 uniform vec4  uCQuat;      // julia constant
 uniform float uSliceH;     // slice offset along its 4-D normal
@@ -309,10 +312,48 @@ float quatDE(vec3 p, out float trap, out float iterF) {
   return max(0.5 * r * log(r) / max(length(dz), 1e-9), 0.0);
 }
 
+// ---------------- hybrid: mandelbulb orbit with mandelbox folds injected ----------------
+float hybridDE(vec3 p, out float trap, out float iterF) {
+  vec3 z = p;
+  float dr = 1.0;
+  float r = length(z);
+  trap = 1e9;
+  int i;
+  for (i = 0; i < 64; i++) {
+    if (i >= uIters) break;
+    r = length(z);
+    if (r > BAIL) break;
+    trap = min(trap, r);
+    // mandelbulb spherical-power step
+    float theta = acos(clamp(z.z / max(r, 1e-9), -1.0, 1.0)) * uPower;
+    float phi   = atan(z.y, z.x) * uPower;
+    dr = pow(r, uPower - 1.0) * uPower * dr + 1.0;
+    float zr = pow(r, uPower);
+    float st = sin(theta), ct = cos(theta);
+    z = zr * vec3(st * cos(phi), st * sin(phi), ct) + p;
+    // every Nth iteration: inject a mandelbox fold + scale
+    if (uBoxEvery >= 1 && (i % uBoxEvery) == (uBoxEvery - 1)) {
+      z = clamp(z, -1.0, 1.0) * 2.0 - z;
+      float r2 = dot(z, z);
+      float m = clamp(1.0 / max(r2, 0.25), 1.0, 4.0);
+      z *= m;
+      dr *= m;
+      z = uScale * z + p;
+      dr = dr * abs(uScale) + 1.0;
+      trap = min(trap, length(z));
+    }
+    if (dr > 1e12) break;
+  }
+  iterF = float(i);
+  r = max(length(z), 1e-9);
+  return max(0.5 * log(r) * r / max(dr, 1e-9), 0.0);
+}
+
 // ---------------- dispatch ----------------
 float mapDE(vec3 p, out float trap, out float iterF) {
   if (uFractal == 1) return boxDE(p, trap, iterF);
-  if (uFractal == 2 || uFractal == 3) return quatDE(p, trap, iterF);
+  if (uFractal == 5) return hybridDE(p, trap, iterF);
+  if (uFractal == 2 || uFractal == 3 || uFractal == 4) return quatDE(p, trap, iterF);
   return bulbDE(p, trap, iterF);
 }
 float mapSimple(vec3 p) {
@@ -536,25 +577,27 @@ if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { fail('Program link error:\n
 gl.useProgram(prog);
 gl.bindVertexArray(gl.createVertexArray());
 
-const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
+const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uBoxEvery','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
 const U = {};
 for (const n of UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
 
 // ---------------------------------------------------------------- state
-const TITLES = ['MANDELBULB', 'MANDELBOX', 'QUATERNION JULIA', 'MANDELBROT 4D', 'BURNING SHIP 4D'];
+const TITLES = ['MANDELBULB', 'MANDELBOX', 'QUATERNION JULIA', 'MANDELBROT 4D', 'BURNING SHIP 4D', 'HYBRID BULB × BOX'];
 const FORMULAS = [
   'z → zⁿ + c \u00a0·\u00a0 the classic 3-D power extension',
   'box-fold → sphere-fold → scale \u00a0·\u00a0 architecture from a map',
   'z → z² + c with c frozen \u00a0·\u00a0 a 3-D slice of a 4-D set',
   'z → z² + c with c = the point \u00a0·\u00a0 the 4-D Mandelbrot body, sliced at w',
-  'z → (|Re z| + Im z)² + c \u00a0·\u00a0 the ship, extended into quaternions'
+  'z → (|Re z| + Im z)² + c \u00a0·\u00a0 the ship, extended into quaternions',
+  'bulb step + box fold every Nth \u00a0·\u00a0 two classics sharing one orbit'
 ];
 const HOMES = [
   { yaw: 0.65, pitch: 0.30, dist: 3.1 },
   { yaw: 0.80, pitch: 0.35, dist: 7.4 },
   { yaw: 0.65, pitch: 0.25, dist: 3.5 },
   { yaw: 0.65, pitch: 0.30, dist: 3.4 },
-  { yaw: 0.0, pitch: 0.0, dist: 4.4, tx: -0.9, ty: -0.4, tz: 0, center: [-0.9, -0.4, 0] }
+  { yaw: 0.0, pitch: 0.0, dist: 4.4, tx: -0.9, ty: -0.4, tz: 0, center: [-0.9, -0.4, 0] },
+  { yaw: 0.65, pitch: 0.30, dist: 3.4 }
 ];
 const JULIA_C = [
   [-0.2,  0.6,  0.2,  0.2 ],   // Crane
@@ -568,7 +611,7 @@ const S = {
   fractal: 0,
   power: 8, iters: 14, detail: 1.0, glow: 0.35,
   palette: 0, colorMode: 0,
-  scale: -1.5, juliaPreset: 0, sliceH: 0, sliceTilt: 0, sliceAzim: 0, sliceElev: 0,
+  scale: -1.5, boxEvery: 2, juliaPreset: 0, sliceH: 0, sliceTilt: 0, sliceAzim: 0, sliceElev: 0,
   cutaway: false, clipFrac: 0.55, center: [0, 0, 0],
   shadows: true, autoRes: true, autoRot: true, morph: false,
   yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist,
@@ -592,6 +635,7 @@ function bindSlider(id, labelId, key, fmt, onSet) {
 }
 const sPower = bindSlider('sPower', 'vPower', 'power', v => v.toFixed(2), () => setMorph(false));
 const sScale = bindSlider('sScale', 'vScale', 'scale', v => v.toFixed(2), () => setMorph(false));
+const sBoxN = bindSlider('sBoxN', 'vBoxN', 'boxEvery', v => String(v | 0));
 const sSlice = bindSlider('sSlice', 'vSlice', 'sliceH', v => v.toFixed(2), () => setMorph(false));
 const sTilt  = bindSlider('sTilt',  'vTilt',  'sliceTilt', v => v.toFixed(2));
 const sAzim  = bindSlider('sAzim',  'vAzim',  'sliceAzim', v => v.toFixed(2));
@@ -628,10 +672,11 @@ function refreshHeader() {
 }
 
 function updateRows() {
-  $('rowPower').style.display = S.fractal === 0 ? '' : 'none';
-  $('rowScale').style.display = S.fractal === 1 ? '' : 'none';
+  $('rowPower').style.display = (S.fractal === 0 || S.fractal === 5) ? '' : 'none';
+  $('rowScale').style.display = (S.fractal === 1 || S.fractal === 5) ? '' : 'none';
+  $('rowBoxN').style.display = S.fractal === 5 ? '' : 'none';
   $('rowJulia').style.display = S.fractal === 2 ? '' : 'none';
-  const quatMode = S.fractal >= 2;
+  const quatMode = S.fractal >= 2 && S.fractal <= 4;
   for (const id of ['rowAzim', 'rowElev', 'rowTilt', 'rowSlice']) {
     $(id).style.display = quatMode ? '' : 'none';
   }
@@ -647,7 +692,7 @@ function syncSliceUI() {
 
 function setFractal(f) {
   S.fractal = f;
-  const iters = { 0: 14, 1: 16, 2: 12, 3: 14, 4: 14 }[f];
+  const iters = { 0: 14, 1: 16, 2: 12, 3: 14, 4: 14, 5: 14 }[f];
   S.iters = iters; sIters.value = iters; $('vIters').textContent = String(iters);
   S.sliceH = 0; S.sliceTilt = 0; S.sliceAzim = 0; S.sliceElev = 0;
   syncSliceUI();
@@ -815,6 +860,10 @@ function typeParams() {
     const bound = Math.max(boxBound(S.scale), boxBound(S.cscale));
     return { bound, scene: HOMES[1].dist / 3.1, fog: 0.015 * Math.pow(3.1 / HOMES[1].dist, 2) };
   }
+  if (S.fractal === 5) {
+    const bound = Math.max(2.0, Math.abs(S.scale) * 2.2 + 0.8, Math.abs(S.cscale) * 2.2 + 0.8);
+    return { bound, scene: HOMES[5].dist / 3.1, fog: 0.015 * Math.pow(3.1 / HOMES[5].dist, 2) };
+  }
   const bound = (S.fractal === 0) ? 1.5 : 2.3;
   const home = HOMES[S.fractal];
   return { bound, scene: home.dist / 3.1, fog: 0.015 * Math.pow(3.1 / home.dist, 2) };
@@ -850,7 +899,7 @@ function frame(now) {
       S.power = 6 + 4 * Math.sin(t);
       sPower.value = S.power;
       $('vPower').textContent = S.power.toFixed(2);
-    } else if (S.fractal === 1) {
+    } else if (S.fractal === 1 || S.fractal === 5) {
       S.scale = -1.5 + 0.4 * Math.sin(t * 1.1);
       sScale.value = S.scale;
       $('vScale').textContent = S.scale.toFixed(2);
@@ -910,6 +959,7 @@ function frame(now) {
   gl.uniform1i(U.uShadows, S.shadows ? 1 : 0);
   gl.uniform1i(U.uFractal, S.fractal);
   gl.uniform1f(U.uScale, S.cscale);
+  gl.uniform1i(U.uBoxEvery, S.boxEvery | 0);
   gl.uniform4f(U.uCQuat, S.cQuat[0], S.cQuat[1], S.cQuat[2], S.cQuat[3]);
   const [sN, sE1, sE2, sE3] = sliceBasis(S.cTilt, S.cAzim, S.cElev);
   gl.uniform1f(U.uSliceH, S.cH);

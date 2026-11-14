@@ -17,6 +17,10 @@ all in a single file: `index.html` (raw WebGL2, no dependencies, no build step).
   solid. As far as we know this one hasn't been done before. The flat 2-D ship is
   still in there: home view + **Cutaway** at depth 1.00 + face-on camera reveals
   the sheet; zoom in along its boundary to find the hull ribs.
+- **Hybrid: Bulb × Box** — a mandelbulb orbit with a mandelbox fold + scale
+  injected every Nth iteration. Power and box scale both live; from "bulb with
+  box bark" to a spherical debris nebula with spiral-galaxy cores. See
+  [ROADMAP.md](ROADMAP.md) for what's next (4-D fly-through, new families, 5-D).
 
 ## Run it
 
