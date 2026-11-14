@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Fractal Atlas — an interactive real-time raymarcher exploring the Mandelbulb, Mandelbox, Quaternion Julia sets, and 3-D slices of the 4-D Mandelbrot. Runs entirely in your browser on your GPU.">
+<meta property="og:title" content="Fractal Atlas">
+<meta property="og:description" content="Fly through the Mandelbulb, Mandelbox, Quaternion Julia, and raymarched 3-D slices of the 4-D Mandelbrot — real-time, in your browser.">
+<meta property="og:type" content="website">
+<title>Fractal Atlas — Mandelbulb · Mandelbox · Quaternion Julia · 4D Mandelbrot · Burning Ship</title>
+<style>
+  :root {
+    --glass: rgba(16, 18, 28, 0.82);
+    --edge: rgba(140, 160, 220, 0.22);
+    --text: #cfd6ea;
+    --dim: #8a93ad;
+    --accent: #8ab4ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05060a; }
+  body { font: 13px/1.45 system-ui, sans-serif; color: var(--text); }
+  #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; cursor: grab; }
+  #c.dragging { cursor: grabbing; }
+
+  .overlay { position: fixed; pointer-events: none; z-index: 5; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+  #title { top: 18px; left: 22px; }
+  #title h1 { font-size: 20px; font-weight: 650; letter-spacing: 0.22em; color: #e8ecf8; }
+  #title span { display: block; font-size: 11.5px; color: var(--dim); margin-top: 3px; letter-spacing: 0.04em; }
+  #hint  { bottom: 16px; left: 22px; font-size: 11.5px; color: var(--dim); letter-spacing: 0.03em; }
+  #fps   { bottom: 16px; right: 22px; font: 11.5px ui-monospace, monospace; color: var(--dim); }
+
+  #panel {
+    position: fixed; top: 16px; right: 16px; z-index: 10;
+    width: 252px; padding: 12px 14px 14px;
+    background: var(--glass); backdrop-filter: blur(10px);
+    border: 1px solid var(--edge); border-radius: 12px;
+    max-height: calc(100vh - 32px); overflow: auto;
+  }
+  #panel h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  #btnHide { all: unset; cursor: pointer; font-size: 14px; line-height: 1; color: var(--dim); padding: 2px 6px; border-radius: 5px; }
+  #btnHide:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+  .row { margin: 8px 0; }
+  .row label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text); margin-bottom: 3px; }
+  .row label span { font: 11px ui-monospace, monospace; color: var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--accent); height: 18px; cursor: pointer; }
+  select {
+    width: 100%; padding: 4px 6px; font: 12px system-ui, sans-serif;
+    background: rgba(255,255,255,0.06); color: var(--text);
+    border: 1px solid var(--edge); border-radius: 6px; cursor: pointer;
+  }
+  select option { background: #141824; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin: 10px 0; }
+  .checks label { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--dim); cursor: pointer; white-space: nowrap; }
+  .checks input { accent-color: var(--accent); cursor: pointer; }
+  .btns { display: flex; gap: 8px; margin-top: 10px; }
+  .btns button {
+    flex: 1; padding: 6px 0; font: 12px system-ui, sans-serif; cursor: pointer;
+    background: rgba(138,180,255,0.10); color: var(--text);
+    border: 1px solid var(--edge); border-radius: 7px;
+  }
+  .btns button:hover { background: rgba(138,180,255,0.20); }
+  #panel footer { margin-top: 10px; font-size: 10.5px; color: var(--dim); opacity: 0.75; letter-spacing: 0.02em; }
+
+  #drawer { margin-top: 12px; border-top: 1px solid var(--edge); padding-top: 8px; }
+  #drawer h3 { font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; align-items: center; }
+  #btnDrawer { all: unset; cursor: pointer; font-size: 13px; line-height: 1; color: var(--dim); padding: 1px 7px; border-radius: 4px; }
+  #btnDrawer:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+  body.drawerClosed #drawerBody { display: none; }
+
+  #panelTab {
+    position: fixed; top: 16px; right: 16px; z-index: 10;
+    padding: 7px 14px; font: 12px system-ui, sans-serif; cursor: pointer;
+    background: var(--glass); color: var(--text);
+    border: 1px solid var(--edge); border-radius: 9px;
+    display: none;
+  }
+  body.zen #panel, body.zen #panelTab, body.zen #title, body.zen #hint, body.zen #fps { display: none; }
+  body.collapsed #panel { display: none; }
+  body.collapsed #panelTab { display: inline-block; }
+
+  #err {
+    display: none; position: fixed; z-index: 20; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 80vw; max-height: 70vh; overflow: auto;
+    padding: 18px; background: #1a0d12; color: #ffb4c0;
+    border: 1px solid #6b2b3a; border-radius: 10px;
+    font: 12px ui-monospace, monospace; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="title" class="overlay">
+  <h1 id="fTitle">MANDELBULB</h1>
+  <span id="formula">z → z⁸ + c &nbsp;·&nbsp; the classic power-8 bulb</span>
+</div>
+<div id="hint" class="overlay">drag orbit &nbsp;·&nbsp; wheel zoom &nbsp;·&nbsp; right-drag pan &nbsp;·&nbsp; Alt+drag / Alt+wheel slice &nbsp;·&nbsp; H hide UI &nbsp;·&nbsp; R reset</div>
+<div id="fps" class="overlay">-- fps</div>
+
+<div id="panel">
+  <h2>Controls <button id="btnHide" title="Collapse (H toggles all UI)">–</button></h2>
+  <div class="row"><label>Fractal</label>
+    <select id="selFrac">
+      <option value="0">Mandelbulb</option>
+      <option value="1">Mandelbox</option>
+      <option value="2">Quaternion Julia</option>
+      <option value="3">Mandelbrot 4D (slice)</option>
+      <option value="4">Burning Ship 4D (experimental)</option>
+    </select>
+  </div>
+  <div class="row" id="rowPower"><label>Power <span id="vPower">8.00</span></label><input id="sPower" type="range" min="2" max="12" step="0.05" value="8"></div>
+  <div class="row" id="rowScale" style="display:none"><label>Scale <span id="vScale">-1.50</span></label><input id="sScale" type="range" min="-3" max="3" step="0.05" value="-1.5"></div>
+  <div class="row" id="rowJulia" style="display:none"><label>Constant c</label>
+    <select id="selJC">
+      <option value="0">Crane</option>
+      <option value="1">Dendrite</option>
+      <option value="2">Coral</option>
+      <option value="3">Opal</option>
+      <option value="4">Comet</option>
+    </select>
+  </div>
+  <div class="row"><label>Iterations <span id="vIters">14</span></label><input id="sIters" type="range" min="4" max="48" step="1" value="14"></div>
+  <div class="row"><label>Detail <span id="vDetail">1.00</span></label><input id="sDetail" type="range" min="0.5" max="2" step="0.05" value="1"></div>
+  <div class="row"><label>Glow <span id="vGlow">0.35</span></label><input id="sGlow" type="range" min="0" max="1" step="0.02" value="0.35"></div>
+  <div class="row"><label>Palette</label>
+    <select id="selPal">
+      <option value="0">Nebula</option>
+      <option value="1">Ember</option>
+      <option value="2">Abyss</option>
+      <option value="3">Pearl</option>
+    </select>
+  </div>
+  <div class="row"><label>Coloring</label>
+    <select id="selMode">
+      <option value="0">Orbit trap</option>
+      <option value="1">Escape iterations</option>
+      <option value="2">Clay</option>
+    </select>
+  </div>
+  <div class="checks">
+    <label><input type="checkbox" id="cbRot" checked> Auto-rotate</label>
+    <label><input type="checkbox" id="cbMorph"> Morph</label>
+    <label><input type="checkbox" id="cbShad" checked> Soft shadows</label>
+    <label><input type="checkbox" id="cbAuto" checked> Auto resolution</label>
+  </div>
+  <div class="btns">
+    <button id="btnShot">Screenshot</button>
+    <button id="btnReset">Reset view</button>
+  </div>
+  <div id="drawer">
+    <h3><span>4D slice &amp; cutaway</span><button id="btnDrawer" title="Collapse / expand">–</button></h3>
+    <div id="drawerBody">
+      <div class="row" id="rowAzim" style="display:none"><label>Slice azimuth <span id="vAzim">0.00</span></label><input id="sAzim" type="range" min="0" max="6.28" step="0.01" value="0"></div>
+      <div class="row" id="rowElev" style="display:none"><label>Slice elevation <span id="vElev">0.00</span></label><input id="sElev" type="range" min="-1.5" max="1.5" step="0.01" value="0"></div>
+      <div class="row" id="rowTilt" style="display:none"><label>Slice tilt (Alt+drag) <span id="vTilt">0.00</span></label><input id="sTilt" type="range" min="0" max="3.14" step="0.01" value="0"></div>
+      <div class="row" id="rowSlice" style="display:none"><label>Slice w (Alt+drag / Alt+wheel) <span id="vSlice">0.00</span></label><input id="sSlice" type="range" min="-3" max="3" step="0.01" value="0"></div>
+      <div class="checks">
+        <label><input type="checkbox" id="cbCut"> Cutaway</label>
+      </div>
+      <div class="row"><label>Cut plane depth ×view <span id="vCut">0.55</span></label><input id="sCut" type="range" min="0.02" max="1.5" step="0.01" value="0.55"></div>
+    </div>
+  </div>
+  <footer>distance-estimated raymarcher · single file · no dependencies</footer>
+</div>
+<button id="panelTab">Controls</button>
+<pre id="err"></pre>
+
+<script id="vert" type="x-shader/x-vertex">#version 300 es
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}
+</script>
+
+<script id="frag" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uCamPos;
+uniform vec3  uCamTarget;
+uniform float uPower;
+uniform int   uIters;
+uniform float uDetail;
+uniform int   uPalette;
+uniform int   uColorMode;
+uniform float uGlow;
+uniform int   uShadows;
+uniform int   uFractal;    // 0 bulb, 1 box, 2 quaternion julia, 3 mandelbrot 4D slice
+uniform float uScale;      // mandelbox scale
+uniform vec4  uCQuat;      // julia constant
+uniform float uSliceH;     // slice offset along its 4-D normal
+uniform vec4  uSliceN;     // slice hyperplane normal (unit, 4-D)
+uniform vec4  uSliceE1;    // slice basis vectors
+uniform vec4  uSliceE2;
+uniform vec4  uSliceE3;
+uniform float uBound;      // bounding sphere radius
+uniform float uSceneScale; // scene normalization (home distance / 3.1)
+uniform float uFogK;       // fog density
+uniform int   uClipOn;     // cutaway clipping plane enabled
+uniform float uClipD;      // cut plane distance along view ray
+uniform vec3  uCenter;     // world-space center of the fractal body
+
+out vec4 fragColor;
+
+const float BAIL  = 2.0;
+const float FOCAL = 2.0;
+
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+vec3 palette(float t) {
+  t = clamp(t, 0.0, 1.0);
+  if (uPalette == 0) return vec3(0.35,0.30,0.40) + vec3(0.42,0.32,0.44) * cos(6.28318 * (t + vec3(0.05,0.18,0.40)));
+  if (uPalette == 1) return vec3(0.45,0.22,0.14) + vec3(0.42,0.26,0.12) * cos(6.28318 * (t + vec3(0.15,0.22,0.30)));
+  if (uPalette == 2) return vec3(0.30,0.34,0.38) + vec3(0.36,0.40,0.42) * cos(6.28318 * (t + vec3(0.10,0.30,0.52)));
+  return vec3(0.66,0.68,0.72) + vec3(0.28,0.28,0.30) * cos(6.28318 * (t + vec3(0.00,0.06,0.12)));
+}
+
+// ---------------- quaternions ----------------
+vec4 qmul(vec4 a, vec4 b) {
+  return vec4(
+    a.x*b.x - a.y*b.y - a.z*b.z - a.w*b.w,
+    a.x*b.y + a.y*b.x + a.z*b.w - a.w*b.z,
+    a.x*b.z - a.y*b.w + a.z*b.x + a.w*b.y,
+    a.x*b.w + a.y*b.z - a.z*b.y + a.w*b.x);
+}
+
+// ---------------- mandelbulb ----------------
+float bulbDE(vec3 p, out float trap, out float iterF) {
+  vec3 z = p;
+  float dr = 1.0;
+  float r = length(z);
+  trap = 1e9;
+  int i;
+  for (i = 0; i < 64; i++) {
+    if (i >= uIters) break;
+    r = length(z);
+    if (r > BAIL) break;
+    trap = min(trap, r);
+    float theta = acos(clamp(z.z / max(r, 1e-9), -1.0, 1.0)) * uPower;
+    float phi   = atan(z.y, z.x) * uPower;
+    dr = pow(r, uPower - 1.0) * uPower * dr + 1.0;
+    if (dr > 1e12) break;
+    float zr = pow(r, uPower);
+    float st = sin(theta), ct = cos(theta);
+    z = zr * vec3(st * cos(phi), st * sin(phi), ct) + p;
+    trap = min(trap, length(z));
+  }
+  iterF = float(i);
+  r = max(length(z), 1e-9);
+  return max(0.5 * log(r) * r / max(dr, 1e-9), 0.0);
+}
+
+// ---------------- mandelbox ----------------
+float boxDE(vec3 p, out float trap, out float iterF) {
+  vec3 z = p;
+  float dr = 1.0;
+  trap = 1e9;
+  int i;
+  for (i = 0; i < 64; i++) {
+    if (i >= uIters) break;
+    z = clamp(z, -1.0, 1.0) * 2.0 - z;                             // box fold
+    float r2 = dot(z, z);
+    float m = clamp(1.0 / max(r2, 0.25), 1.0, 4.0);                // sphere fold (minR 0.5, fixedR 1)
+    z *= m;
+    dr *= m;
+    trap = min(trap, length(z));
+    z = uScale * z + p;
+    dr = dr * abs(uScale) + 1.0;
+    if (dr > 1e12) break;
+  }
+  iterF = float(i);
+  return max(length(z) / max(dr, 1e-9), 0.0);
+}
+
+// ---------------- quaternion julia / 4D mandelbrot / ship ----------------
+vec4 slicePoint(vec3 p) {
+  vec3 pc = p - uCenter;   // fractal body center (ship sits off-origin)
+  return uSliceH * uSliceN + pc.x * uSliceE1 + pc.y * uSliceE2 + pc.z * uSliceE3;
+}
+
+float quatDE(vec3 p, out float trap, out float iterF) {
+  vec4 q0 = slicePoint(p);
+  vec4 z, c;
+  if (uFractal == 2) { z = q0; c = uCQuat; }
+  else { z = q0; c = z; }                                          // mandelbrot/ship: seed with first step (z0 = 0)
+  vec4 dz = vec4(1.0, 0.0, 0.0, 0.0);
+  float r = length(z);
+  trap = 1e9;
+  int i;
+  for (i = 0; i < 64; i++) {
+    if (i >= uIters) break;
+    if (uFractal == 4) z.x = abs(z.x);   // burning-ship fold on the real axis
+    dz = 2.0 * qmul(z, dz);
+    z = qmul(z, z) + c;
+    r = length(z);
+    if (r > 4.0) break;
+    trap = min(trap, r);
+  }
+  iterF = float(i);
+  r = max(r, 1e-9);
+  return max(0.5 * r * log(r) / max(length(dz), 1e-9), 0.0);
+}
+
+// ---------------- dispatch ----------------
+float mapDE(vec3 p, out float trap, out float iterF) {
+  if (uFractal == 1) return boxDE(p, trap, iterF);
+  if (uFractal == 2 || uFractal == 3) return quatDE(p, trap, iterF);
+  return bulbDE(p, trap, iterF);
+}
+float mapSimple(vec3 p) {
+  float t, f;
+  return mapDE(p, t, f);
+}
+
+vec3 calcNormal(vec3 p, float e, vec3 rd) {
+  vec2 k = vec2(1.0, -1.0);
+  vec3 g =
+    k.xyy * mapSimple(p + k.xyy * e) +
+    k.yyx * mapSimple(p + k.yyx * e) +
+    k.yxy * mapSimple(p + k.yxy * e) +
+    k.xxx * mapSimple(p + k.xxx * e);
+  float g2 = dot(g, g);
+  if (!(g2 > 1e-18)) return -rd;  // guard: NaN/zero gradient in degenerate zones
+  return g * inversesqrt(g2);
+}
+
+float calcAO(vec3 p, vec3 n) {
+  float occ = 0.0;
+  float sca = 1.0;
+  for (int i = 0; i < 5; i++) {
+    float h = uSceneScale * (0.01 + 0.07 * float(i));
+    occ += (h - mapSimple(p + n * h)) * sca;
+    sca *= 0.80;
+  }
+  return max(clamp(1.0 - 2.2 * occ, 0.0, 1.0), 0.05);  // floor: pits keep tone
+}
+
+float softShadow(vec3 ro, vec3 rd) {
+  float res = 1.0;
+  float t = 0.02 * uSceneScale;
+  for (int i = 0; i < 32; i++) {
+    float d = mapSimple(ro + rd * t);
+    if (d < 0.0004 * t) return 0.02;      // soften: no hard-zero crunch
+    res = min(res, 5.0 * d / t);
+    t += clamp(d, 0.006, 0.14) * uSceneScale;
+    if (t > 3.0 * uSceneScale) break;
+  }
+  return clamp(res, 0.02, 1.0);
+}
+
+float march(vec3 ro, vec3 rd, out float trap, out float iterF, out float glowAcc, out float cutHit) {
+  trap = 0.0; iterF = 0.0; glowAcc = 0.0; cutHit = 0.0;
+  vec3 rel = ro - uCenter;
+  float b = dot(rel, rd);
+  float c = dot(rel, rel) - uBound * uBound;
+  float h = b * b - c;
+  if (h < 0.0) return -1.0;
+  h = sqrt(h);
+  float t = max(-b - h, 0.02 * uSceneScale);
+  float tExit = -b + h;
+  float pxScale = 0.8 / (uRes.y * max(uDetail, 0.05));
+  // cutaway: clip everything on the camera side of the plane; where the solid
+  // intersects the plane, show the interior cross-section.
+  if (uClipOn == 1 && uClipD > t && uClipD < tExit) {
+    vec3 pc = ro + rd * uClipD;
+    float tr, it;
+    float d0 = mapDE(pc, tr, it);
+    if (d0 < max(pxScale * uClipD, 2e-5 * uSceneScale)) {
+      trap = tr; iterF = it; cutHit = 1.0;
+      return uClipD;
+    }
+    t = uClipD;
+  }
+  float stepMul = (uFractal == 1) ? 0.85 : 0.65;
+  for (int i = 0; i < 220; i++) {
+    vec3 pos = ro + rd * t;
+    float tr, it;
+    float d = mapDE(pos, tr, it);
+    float eps = max(pxScale * t, 2e-5 * uSceneScale);
+    glowAcc += 0.05 * exp(-1.5 * d / eps);
+    glowAcc = min(glowAcc, 2.0);
+    if (d < eps) { trap = tr; iterF = it; return t; }
+    t += stepMul * d;
+    if (t > tExit) break;
+  }
+  return -1.0;
+}
+
+// Deep escape-time coloring for cross-section faces (quat modes): the marching
+// iteration count is too low to resolve fine interior structure, so cut faces
+// get their own high-iteration pass — this is what makes slice photos crisp.
+vec3 cutColorQ(vec4 q0) {
+  vec4 z = q0;
+  vec4 c = (uFractal == 2) ? uCQuat : q0;
+  float trap = 1e9;
+  int i;
+  for (i = 0; i < 128; i++) {
+    if (uFractal == 4) z.x = abs(z.x);
+    z = qmul(z, z) + c;
+    float r = length(z);
+    if (r > 4.0) break;
+    trap = min(trap, r);
+  }
+  float tc = (uColorMode == 0)
+    ? 0.15 + 0.85 * sqrt(clamp(trap * 0.85, 0.0, 1.0))
+    : clamp(float(i) / 96.0, 0.0, 1.0);
+  return palette(tc);
+}
+
+vec3 background(vec3 rd) {
+  float y = clamp(rd.y * 0.5 + 0.5, 0.0, 1.0);
+  return mix(vec3(0.012,0.012,0.020), vec3(0.055,0.065,0.105), pow(y, 1.4));
+}
+
+vec3 shadePoint(vec3 p, vec3 n, vec3 rd, float trap, float iterF, float ao, out float spe) {
+  vec3 alb;
+  if (uColorMode == 0) alb = palette(clamp(trap * 0.85, 0.0, 1.0));
+  else if (uColorMode == 1) alb = palette(clamp(iterF / max(float(uIters), 1.0), 0.0, 1.0));
+  else alb = vec3(0.58, 0.55, 0.52);
+
+  vec3 ld  = normalize(vec3(0.75, 0.60, 0.50));
+  float dif = clamp(dot(n, ld), 0.0, 1.0);
+  float sh = (uShadows == 1) ? softShadow(p + n * 0.008 * uSceneScale, ld) : 1.0;
+  float bac = clamp(dot(n, normalize(vec3(-ld.x, 0.2, -ld.z))), 0.0, 1.0);
+  float amb = clamp(0.55 + 0.45 * n.y, 0.0, 1.0);
+  float fre = pow(clamp(1.0 + dot(n, rd), 0.0, 1.0), 3.0);
+
+  vec3 lin = vec3(0.0);
+  lin += vec3(1.30, 1.12, 0.92) * dif * sh * 1.45;
+  lin += vec3(0.18, 0.22, 0.30) * amb * (0.35 + 0.65 * ao);
+  lin += vec3(0.14, 0.11, 0.16) * bac * (0.40 + 0.60 * ao);
+  lin += vec3(0.030, 0.033, 0.042);  // cave fill: crevices keep tone, never hard black
+
+  spe = pow(clamp(dot(reflect(rd, n), ld), 0.0, 1.0), 28.0) * dif * sh;
+  return alb * lin + vec3(0.9, 0.95, 1.0) * fre * 0.18 * (0.5 + 0.5 * ao);
+}
+
+void main() {
+  vec2 uv = (2.0 * gl_FragCoord.xy - uRes) / uRes.y;
+  vec3 ro = uCamPos;
+  vec3 fw = normalize(uCamTarget - uCamPos);
+  vec3 rt = normalize(cross(vec3(0.0, 1.0, 0.0), fw));
+  vec3 up = cross(fw, rt);
+  vec3 rd = normalize(uv.x * rt + uv.y * up + FOCAL * fw);
+
+  float trap, iterF, glowAcc, cutHit;
+  float t = march(ro, rd, trap, iterF, glowAcc, cutHit);
+
+  vec3 col;
+  if (t > 0.0 && cutHit > 0.5) {
+    // interior cross-section: flat coloring like a slice photo; quat modes get
+    // a deep escape-time pass so fine interior structure stays crisp
+    vec3 p = ro + rd * t;
+    vec3 alb;
+    if (uFractal >= 2) alb = cutColorQ(slicePoint(p));
+    else if (uColorMode == 0) alb = palette(0.15 + 0.85 * sqrt(clamp(trap * 0.85, 0.0, 1.0)));
+    else if (uColorMode == 1) alb = palette(clamp(iterF / max(float(uIters), 1.0), 0.0, 1.0));
+    else alb = vec3(0.58, 0.55, 0.52);
+    col = alb * 0.80;
+    col = mix(col, background(rd), clamp(1.0 - exp(-uFogK * t * t), 0.0, 1.0));
+  } else if (t > 0.0) {
+    vec3 p = ro + rd * t;
+    float e = max((0.8 / (uRes.y * max(uDetail, 0.05))) * t, 1e-4 * uSceneScale);
+    vec3 n = calcNormal(p, e, rd);
+    float ao = calcAO(p, n);
+    float spe;
+    col = shadePoint(p, n, rd, trap, iterF, ao, spe);
+    vec3 bg = background(rd);
+    col = mix(col, bg, clamp(1.0 - exp(-uFogK * t * t), 0.0, 1.0));
+    col += spe * vec3(0.8, 0.85, 1.0) * 0.6;
+  } else {
+    col = background(rd);
+  }
+  col += palette(0.72) * glowAcc * uGlow;
+
+  // tone map, saturation, vignette, dither
+  col *= 1.25;
+  col = col / (1.0 + col);
+  col = pow(col, vec3(0.4545));
+  float lum = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(lum), col, 1.10);
+  col *= 0.45 + 0.55 * smoothstep(1.8, 0.35, length(uv));
+  col += (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
+  fragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const canvas = $('c');
+const errBox = $('err');
+
+function fail(msg) {
+  errBox.style.display = 'block';
+  errBox.textContent += msg + '\n';
+  console.error(msg);
+}
+
+const gl = canvas.getContext('webgl2', {
+  antialias: false, alpha: false, depth: false, stencil: false,
+  powerPreference: 'high-performance'
+});
+if (!gl) { fail('WebGL2 is not available in this browser.'); return; }
+
+const VERT = $('vert').textContent;
+const FRAG = $('frag').textContent;
+
+function compile(type, src, name) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    fail(name + ' shader error:\n' + gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+const vs = compile(gl.VERTEX_SHADER, VERT, 'vertex');
+const fs = compile(gl.FRAGMENT_SHADER, FRAG, 'fragment');
+if (!vs || !fs) return;
+const prog = gl.createProgram();
+gl.attachShader(prog, vs);
+gl.attachShader(prog, fs);
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { fail('Program link error:\n' + gl.getProgramInfoLog(prog)); return; }
+gl.useProgram(prog);
+gl.bindVertexArray(gl.createVertexArray());
+
+const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
+const U = {};
+for (const n of UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
+
+// ---------------------------------------------------------------- state
+const TITLES = ['MANDELBULB', 'MANDELBOX', 'QUATERNION JULIA', 'MANDELBROT 4D', 'BURNING SHIP 4D'];
+const FORMULAS = [
+  'z → zⁿ + c \u00a0·\u00a0 the classic 3-D power extension',
+  'box-fold → sphere-fold → scale \u00a0·\u00a0 architecture from a map',
+  'z → z² + c with c frozen \u00a0·\u00a0 a 3-D slice of a 4-D set',
+  'z → z² + c with c = the point \u00a0·\u00a0 the 4-D Mandelbrot body, sliced at w',
+  'z → (|Re z| + Im z)² + c \u00a0·\u00a0 the ship, extended into quaternions'
+];
+const HOMES = [
+  { yaw: 0.65, pitch: 0.30, dist: 3.1 },
+  { yaw: 0.80, pitch: 0.35, dist: 7.4 },
+  { yaw: 0.65, pitch: 0.25, dist: 3.5 },
+  { yaw: 0.65, pitch: 0.30, dist: 3.4 },
+  { yaw: 0.0, pitch: 0.0, dist: 4.4, tx: -0.9, ty: -0.4, tz: 0, center: [-0.9, -0.4, 0] }
+];
+const JULIA_C = [
+  [-0.2,  0.6,  0.2,  0.2 ],   // Crane
+  [ 0.0, -0.65, 0.0,  0.0 ],   // Dendrite
+  [-0.45,-0.45, 0.45, 0.45],   // Coral
+  [-0.25, 0.4,  0.35, 0.3 ],   // Opal
+  [-0.6, -0.1,  0.3,  0.2 ]    // Comet
+];
+const HOME = { yaw: 0.65, pitch: 0.30, dist: 3.1 };
+const S = {
+  fractal: 0,
+  power: 8, iters: 14, detail: 1.0, glow: 0.35,
+  palette: 0, colorMode: 0,
+  scale: -1.5, juliaPreset: 0, sliceH: 0, sliceTilt: 0, sliceAzim: 0, sliceElev: 0,
+  cutaway: false, clipFrac: 0.55, center: [0, 0, 0],
+  shadows: true, autoRes: true, autoRot: true, morph: false,
+  yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist,
+  tx: 0, ty: 0, tz: 0,
+  cyaw: HOME.yaw, cpitch: HOME.pitch, cdist: HOME.dist,
+  ctx: 0, cty: 0, ctz: 0, cpow: 8,
+  cscale: -1.5, cH: 0, cTilt: 0, cAzim: 0, cElev: 0, cQuat: JULIA_C[0].slice()
+};
+const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
+
+// ---------------------------------------------------------------- UI wiring
+function bindSlider(id, labelId, key, fmt, onSet) {
+  const el = $(id), lab = $(labelId);
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    S[key] = v;
+    lab.textContent = typeof fmt === 'function' ? fmt(v) : v;
+    if (onSet) onSet(v);
+  });
+  return el;
+}
+const sPower = bindSlider('sPower', 'vPower', 'power', v => v.toFixed(2), () => setMorph(false));
+const sScale = bindSlider('sScale', 'vScale', 'scale', v => v.toFixed(2), () => setMorph(false));
+const sSlice = bindSlider('sSlice', 'vSlice', 'sliceH', v => v.toFixed(2), () => setMorph(false));
+const sTilt  = bindSlider('sTilt',  'vTilt',  'sliceTilt', v => v.toFixed(2));
+const sAzim  = bindSlider('sAzim',  'vAzim',  'sliceAzim', v => v.toFixed(2));
+const sElev  = bindSlider('sElev',  'vElev',  'sliceElev', v => v.toFixed(2));
+const sCut   = bindSlider('sCut',   'vCut',   'clipFrac',  v => v.toFixed(2));
+const sIters = bindSlider('sIters', 'vIters', 'iters', v => String(v | 0));
+bindSlider('sDetail', 'vDetail', 'detail', v => v.toFixed(2));
+bindSlider('sGlow', 'vGlow', 'glow', v => v.toFixed(2));
+
+$('selFrac').addEventListener('change', e => setFractal(e.target.value | 0));
+$('selJC').addEventListener('change', e => S.juliaPreset = e.target.value | 0);
+$('selPal').addEventListener('change', e => S.palette = e.target.value | 0);
+$('selMode').addEventListener('change', e => S.colorMode = e.target.value | 0);
+$('cbRot').addEventListener('change', e => S.autoRot = e.target.checked);
+$('cbShad').addEventListener('change', e => S.shadows = e.target.checked);
+$('cbAuto').addEventListener('change', e => S.autoRes = e.target.checked);
+$('cbMorph').addEventListener('change', e => setMorph(e.target.checked));
+$('cbCut').addEventListener('change', e => S.cutaway = e.target.checked);
+$('btnDrawer').addEventListener('click', () => document.body.classList.toggle('drawerClosed'));
+
+function setMorph(on) {
+  S.morph = on;
+  $('cbMorph').checked = on;
+  if (!on) {
+    sPower.value = S.power; $('vPower').textContent = S.power.toFixed(2);
+    sScale.value = S.scale; $('vScale').textContent = S.scale.toFixed(2);
+    syncSliceUI();
+  }
+}
+
+function refreshHeader() {
+  $('fTitle').textContent = TITLES[S.fractal];
+  $('formula').textContent = FORMULAS[S.fractal];
+}
+
+function updateRows() {
+  $('rowPower').style.display = S.fractal === 0 ? '' : 'none';
+  $('rowScale').style.display = S.fractal === 1 ? '' : 'none';
+  $('rowJulia').style.display = S.fractal === 2 ? '' : 'none';
+  const quatMode = S.fractal >= 2;
+  for (const id of ['rowAzim', 'rowElev', 'rowTilt', 'rowSlice']) {
+    $(id).style.display = quatMode ? '' : 'none';
+  }
+}
+
+function syncSliceUI() {
+  sSlice.value = S.sliceH; $('vSlice').textContent = S.sliceH.toFixed(2);
+  sTilt.value = S.sliceTilt; $('vTilt').textContent = S.sliceTilt.toFixed(2);
+  sAzim.value = ((S.sliceAzim % 6.28318) + 6.28318) % 6.28318;
+  $('vAzim').textContent = S.sliceAzim.toFixed(2);
+  sElev.value = S.sliceElev; $('vElev').textContent = S.sliceElev.toFixed(2);
+}
+
+function setFractal(f) {
+  S.fractal = f;
+  const iters = { 0: 14, 1: 16, 2: 12, 3: 14, 4: 14 }[f];
+  S.iters = iters; sIters.value = iters; $('vIters').textContent = String(iters);
+  S.sliceH = 0; S.sliceTilt = 0; S.sliceAzim = 0; S.sliceElev = 0;
+  syncSliceUI();
+  updateRows();
+  const home = HOMES[f];
+  S.yaw = home.yaw; S.pitch = home.pitch; S.dist = home.dist;
+  S.tx = home.tx || 0; S.ty = home.ty || 0; S.tz = home.tz || 0;
+  S.center = home.center ? home.center.slice() : [0, 0, 0];
+  // snap type-specific smoothing so nothing morphs unexpectedly
+  S.cpow = S.power; S.cscale = S.scale; S.cH = 0; S.cTilt = 0; S.cAzim = 0; S.cElev = 0;
+  S.cQuat = juliaCTarget().slice();
+  refreshHeader();
+}
+
+function resetView() {
+  const home = HOMES[S.fractal];
+  S.yaw = home.yaw; S.pitch = home.pitch; S.dist = home.dist;
+  S.tx = home.tx || 0; S.ty = home.ty || 0; S.tz = home.tz || 0;
+}
+$('btnReset').addEventListener('click', resetView);
+
+function setUIMode(m) {
+  document.body.classList.toggle('collapsed', m === 'collapsed');
+  document.body.classList.toggle('zen', m === 'zen');
+}
+$('btnHide').addEventListener('click', () => setUIMode('collapsed'));
+$('panelTab').addEventListener('click', () => setUIMode('normal'));
+
+let wantShot = false;
+$('btnShot').addEventListener('click', () => wantShot = true);
+
+// ---------------------------------------------------------------- input
+const pointers = new Map();
+let dragging = false, panMode = false, sliceMode = false, lastX = 0, lastY = 0, lastSpan = 0;
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('pointerdown', e => {
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) {
+    dragging = true;
+    panMode = (e.button === 2 || e.shiftKey);
+    sliceMode = (e.altKey && S.fractal >= 2);
+    if (sliceMode) { S.sliceAzim = S.yaw; syncSliceUI(); }  // tilt toward where you're looking
+    lastX = e.clientX; lastY = e.clientY;
+    canvas.classList.add('dragging');
+  } else if (pointers.size === 2) {
+    const p = [...pointers.values()];
+    lastSpan = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
+  }
+});
+
+canvas.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 2) {
+    const p = [...pointers.values()];
+    const span = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
+    if (lastSpan > 0 && span > 0) S.dist = clampN(S.dist * (lastSpan / span), 1.05, 40);
+    lastSpan = span;
+    return;
+  }
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  if (sliceMode) {
+    S.sliceTilt = clampN(S.sliceTilt + dx * 0.0025, 0, Math.PI);
+    S.sliceH = clampN(S.sliceH - dy * 0.0025, -3, 3);
+    syncSliceUI();
+  } else if (panMode) {
+    const k = S.dist * 0.0016;
+    const [rt, up] = basis(S.yaw, S.pitch);
+    S.tx = clampN(S.tx - rt[0] * dx * k + up[0] * dy * k, -2, 2);
+    S.ty = clampN(S.ty - rt[1] * dx * k + up[1] * dy * k, -2, 2);
+    S.tz = clampN(S.tz - rt[2] * dx * k + up[2] * dy * k, -2, 2);
+  } else {
+    S.yaw   -= dx * 0.005;
+    S.pitch  = clampN(S.pitch + dy * 0.005, -1.52, 1.52);
+  }
+});
+
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) {
+    dragging = false;
+    sliceMode = false;
+    canvas.classList.remove('dragging');
+  } else if (pointers.size === 1) {
+    const p = [...pointers.values()][0];
+    lastX = p[0]; lastY = p[1];
+    dragging = true; panMode = false; sliceMode = false;
+  }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.altKey && S.fractal >= 2) {
+    // one deterministic 0.01 step per event for screenshot-precise setups
+    S.sliceH = clampN(S.sliceH + (e.deltaY < 0 ? 0.01 : -0.01), -3, 3);
+    syncSliceUI();
+    return;
+  }
+  S.dist = clampN(S.dist * Math.exp(e.deltaY * 0.0012), 1.05, 40);
+}, { passive: false });
+
+canvas.addEventListener('dblclick', resetView);
+
+window.addEventListener('keydown', e => {
+  const t = e.target;
+  if (t && t !== document.body && t !== canvas) return;
+  if (e.key === 'h' || e.key === 'H') {
+    setUIMode(document.body.classList.contains('zen') ? 'normal' : 'zen');
+  } else if (e.key === 'r' || e.key === 'R') {
+    resetView();
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    S.autoRot = !S.autoRot;
+    $('cbRot').checked = S.autoRot;
+  }
+});
+
+// ---------------------------------------------------------------- camera math
+function basis(yaw, pitch) {
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const sy = Math.sin(yaw), cy = Math.cos(yaw);
+  const fw = [-cp * sy, -sp, -cp * cy];
+  const len = Math.hypot(fw[0], fw[2]) || 1e-9;
+  const rt = [fw[2] / len, 0, -fw[0] / len];
+  const up = [
+    fw[1] * rt[2] - fw[2] * rt[1],
+    fw[2] * rt[0] - fw[0] * rt[2],
+    fw[0] * rt[1] - fw[1] * rt[0]
+  ];
+  return [rt, up];
+}
+
+// ---------------------------------------------------------------- fractal params
+function boxBound(s) { return Math.max(3.0, Math.abs(s) * 2.6 + 1.0); }
+// 4-D slice hyperplane: unit normal built from tilt amount + azimuth/elevation
+// direction, plus an orthonormal basis for the hyperplane (Gram-Schmidt).
+function sliceBasis(tilt, azim, elev) {
+  const st = Math.sin(tilt), ct = Math.cos(tilt);
+  const ce = Math.cos(elev), se = Math.sin(elev);
+  const dir = [Math.sin(azim) * ce, se, Math.cos(azim) * ce];
+  const n = [st * dir[0], st * dir[1], st * dir[2], ct];
+  const cands = [[0,0,0,1],[1,0,0,0],[0,1,0,0],[0,0,1,0]];
+  const bs = [];
+  for (const cand of cands) {
+    let v = cand.slice();
+    for (const b of bs) {
+      const d = v[0]*b[0] + v[1]*b[1] + v[2]*b[2] + v[3]*b[3];
+      v = [v[0]-d*b[0], v[1]-d*b[1], v[2]-d*b[2], v[3]-d*b[3]];
+    }
+    const l = Math.hypot(v[0], v[1], v[2], v[3]);
+    if (l > 0.1) bs.push([v[0]/l, v[1]/l, v[2]/l, v[3]/l]);
+    if (bs.length === 3) break;
+  }
+  return [n, bs[0], bs[1], bs[2]];
+}
+function typeParams() {
+  if (S.fractal === 1) {
+    const bound = Math.max(boxBound(S.scale), boxBound(S.cscale));
+    return { bound, scene: HOMES[1].dist / 3.1, fog: 0.015 * Math.pow(3.1 / HOMES[1].dist, 2) };
+  }
+  const bound = (S.fractal === 0) ? 1.5 : 2.3;
+  const home = HOMES[S.fractal];
+  return { bound, scene: home.dist / 3.1, fog: 0.015 * Math.pow(3.1 / home.dist, 2) };
+}
+function juliaCTarget() {
+  const c0 = JULIA_C[S.juliaPreset] || JULIA_C[0];
+  if (!S.morph) return c0.slice();
+  const t = performance.now() * 0.00035;
+  return [
+    c0[0] + 0.05 * Math.cos(t * 1.00),
+    c0[1] + 0.05 * Math.sin(t * 0.83),
+    c0[2] + 0.05 * Math.cos(t * 0.61),
+    c0[3] + 0.05 * Math.sin(t * 0.47)
+  ];
+}
+
+// ---------------------------------------------------------------- render loop
+const fpsEl = $('fps');
+let prev = performance.now();
+let fpsEma = 60;
+let dynScale = 0.8;
+let lastAdapt = 0, lastHud = 0;
+
+function frame(now) {
+  const dt = clampN((now - prev) / 1000, 1e-4, 0.1);
+  prev = now;
+  fpsEma = fpsEma * 0.92 + (1 / dt) * 0.08;
+
+  if (S.autoRot && !dragging) S.yaw += dt * 0.15;
+  if (S.morph) {
+    const t = now * 0.00035;
+    if (S.fractal === 0) {
+      S.power = 6 + 4 * Math.sin(t);
+      sPower.value = S.power;
+      $('vPower').textContent = S.power.toFixed(2);
+    } else if (S.fractal === 1) {
+      S.scale = -1.5 + 0.4 * Math.sin(t * 1.1);
+      sScale.value = S.scale;
+      $('vScale').textContent = S.scale.toFixed(2);
+    } else if (S.fractal >= 3) {
+      S.sliceH = 0.4 * Math.sin(t * 0.8);
+      sSlice.value = S.sliceH;
+      $('vSlice').textContent = S.sliceH.toFixed(2);
+    }
+    // fractal 2 (julia) morphs c via juliaCTarget()
+  }
+
+  const k = 1 - Math.exp(-dt * 10);
+  S.cyaw   += (S.yaw - S.cyaw) * k;
+  S.cpitch += (S.pitch - S.cpitch) * k;
+  S.cdist  += (S.dist - S.cdist) * k;
+  S.ctx += (S.tx - S.ctx) * k;
+  S.cty += (S.ty - S.cty) * k;
+  S.ctz += (S.tz - S.ctz) * k;
+  S.cpow  += (S.power - S.cpow) * k;
+  S.cscale += (S.scale - S.cscale) * k;
+  S.cH += (S.sliceH - S.cH) * k;
+  S.cTilt += (S.sliceTilt - S.cTilt) * k;
+  S.cAzim += (S.sliceAzim - S.cAzim) * k;
+  S.cElev += (S.sliceElev - S.cElev) * k;
+  const ct = juliaCTarget();
+  for (let i = 0; i < 4; i++) S.cQuat[i] += (ct[i] - S.cQuat[i]) * k;
+
+  // adaptive resolution
+  if (S.autoRes && now - lastAdapt > 600) {
+    lastAdapt = now;
+    const eff = fpsEma * (dragging ? 0.6 : 1);
+    if (eff < 45) dynScale = Math.max(0.30, dynScale * 0.87);
+    else if (eff > 57) dynScale = Math.min(1.0, dynScale * 1.05);
+  }
+  const scale = dragging ? Math.min(dynScale, 0.55) : dynScale;
+  const w = Math.max(2, Math.round(canvas.clientWidth * scale));
+  const h = Math.max(2, Math.round(canvas.clientHeight * scale));
+  if (w !== canvas.width || h !== canvas.height) { canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, canvas.width, canvas.height);
+
+  const cp = Math.cos(S.cpitch), sp = Math.sin(S.cpitch);
+  const sy = Math.sin(S.cyaw), cy = Math.cos(S.cyaw);
+  const tp = typeParams();
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uTime, now / 1000);
+  gl.uniform3f(U.uCamPos,
+    S.ctx + S.cdist * cp * sy,
+    S.cty + S.cdist * sp,
+    S.ctz + S.cdist * cp * cy);
+  gl.uniform3f(U.uCamTarget, S.ctx, S.cty, S.ctz);
+  gl.uniform1f(U.uPower, S.cpow);
+  gl.uniform1i(U.uIters, S.iters | 0);
+  gl.uniform1f(U.uDetail, S.detail);
+  gl.uniform1i(U.uPalette, S.palette);
+  gl.uniform1i(U.uColorMode, S.colorMode);
+  gl.uniform1f(U.uGlow, S.glow);
+  gl.uniform1i(U.uShadows, S.shadows ? 1 : 0);
+  gl.uniform1i(U.uFractal, S.fractal);
+  gl.uniform1f(U.uScale, S.cscale);
+  gl.uniform4f(U.uCQuat, S.cQuat[0], S.cQuat[1], S.cQuat[2], S.cQuat[3]);
+  const [sN, sE1, sE2, sE3] = sliceBasis(S.cTilt, S.cAzim, S.cElev);
+  gl.uniform1f(U.uSliceH, S.cH);
+  gl.uniform4f(U.uSliceN, sN[0], sN[1], sN[2], sN[3]);
+  gl.uniform4f(U.uSliceE1, sE1[0], sE1[1], sE1[2], sE1[3]);
+  gl.uniform4f(U.uSliceE2, sE2[0], sE2[1], sE2[2], sE2[3]);
+  gl.uniform4f(U.uSliceE3, sE3[0], sE3[1], sE3[2], sE3[3]);
+  gl.uniform1i(U.uClipOn, S.cutaway ? 1 : 0);
+  gl.uniform1f(U.uClipD, S.cutaway ? S.cdist * S.clipFrac : 0.0);
+  gl.uniform3f(U.uCenter, S.center[0], S.center[1], S.center[2]);
+  gl.uniform1f(U.uBound, tp.bound);
+  gl.uniform1f(U.uSceneScale, tp.scene);
+  gl.uniform1f(U.uFogK, tp.fog);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  if (wantShot) {
+    wantShot = false;
+    const a = document.createElement('a');
+    a.download = TITLES[S.fractal].toLowerCase().replace(/\s+/g, '-') + '-' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  }
+
+  if (now - lastHud > 250) {
+    lastHud = now;
+    fpsEl.textContent = Math.round(fpsEma) + ' fps \u00b7 ' + canvas.width + '\u00d7' + canvas.height;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
