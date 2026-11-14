@@ -30,9 +30,13 @@ all in a single file: `index.html` (raw WebGL2, no dependencies, no build step).
 - **Fly-through** (drawer, quat modes) — continuous travel through the fourth
   dimension with a speed slider and soft bounce; combine with auto-rotate for
   auto-pilot recordings.
+- **KIFS Temple** — kaleidoscopic IFS: abs fold → orthonormal sort → twist →
+  scale. Twisted Sierpinski gaskets, triangular-lace tiles, fractal temples.
+- **Apollonian Foam (infinite)** — periodic tile fold + sphere inversions: an
+  endless iridescent plain with golden dome-temples. The dark wells are real
+  inversion centers going to infinity.
 
-See [ROADMAP.md](ROADMAP.md) for the full queue (Kleinian, Apollonian, KIFS,
-and 5-D are next).
+See [ROADMAP.md](ROADMAP.md) for the full queue (Kleinian next, then 5-D).
 
 ## Run it
 

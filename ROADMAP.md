@@ -26,10 +26,16 @@ The exploration queue for the Fractal Atlas, roughly in build order.
 - **Rosebulb** (shipped) — invented for this atlas: the bulb power wobbles with
   orbit azimuth (`p(θ) = power + amp·sin 2θ`), breaking the symmetric lobes into
   organic caramel drapery and rose-cluster knuckles.
-- Still queued: **Kleinian gasket** (inversion-driven circle chains, "swamp"
-  limit sets), **Apollonian packing** (infinite sphere-inversion cascades),
-  **KIFS kaleidoscopes** (rotating fold+scale temples) — each needs its own
-  tuning pass.
+- **KIFS Temple** (shipped) — kaleidoscopic IFS: abs fold → orthonormal sort →
+  twist → scale-translate. The twist slider breaks the classic Sierpinski
+  gasket into rings of triangular-lace tiles; scale slider runs from solid to
+  Cantor-dust.
+- **Apollonian Foam** (shipped) — periodic tile fold + sphere inversions
+  (Inigo Quilez's exact DE): an infinite plain of iridescent foam with golden
+  dome-temples at every tile. The Inversion k slider tunes the packing; the
+  dark "wells" are real — inversion centers that go to infinity.
+- Still queued: **Kleinian gasket** — Schottky-group limit sets via circle
+  inversions; the one kernel that needs its own dedicated tuning session.
 
 ## 4. 5D — deliberately last
 The 4-D modes are slices of 4-D sets; the 5-D body is the *family of all such
