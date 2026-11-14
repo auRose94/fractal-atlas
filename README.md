@@ -37,6 +37,9 @@ all in a single file: `index.html` (raw WebGL2, no dependencies, no build step).
   inversions, orbit-folded. The limit structure hides inside the generator
   spheres: enable **Cutaway** (~depth 0.9) to expose the pearl rings and
   limit-point pupils.
+- **Mandeljulia 5D** — the finale: a genuine 5-D body (the family of
+  quaternion julia sets whose constant orbits a path as a fifth coordinate
+  advances), raymarched as a tiltable 3-D slice. Morph flies the fifth axis.
 - **Fly-through** (drawer, quat modes) — continuous travel through the fourth
   dimension with a speed slider and soft bounce; combine with auto-rotate for
   auto-pilot recordings.

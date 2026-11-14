@@ -52,11 +52,20 @@ The exploration queue for the Fractal Atlas, roughly in build order.
   and violet strata. Future refinement: the classical flat gasket via
   Descartes-sector DEs.
 
-## 4. 5D — deliberately last
-The 4-D modes are slices of 4-D sets; the 5-D body is the *family of all such
-slices*. Design sketch: coordinates = (3-D slice point, slice offset w,
-meta-parameter), where the meta-parameter indexes the slice orientation itself
-(e.g. the Julia constant's angle in 4-space, or the tilt plane of the cut).
-One more knob, one more family of structures — visited after everything above
-so the navigation language (orbit / slice / cutaway / fly) is fully matured
-first.
+## 4. 5D — shipped (the finale)
+There is no canonical "5-D Mandelbrot set": by the Hurwitz theorem, normed
+division algebras only exist in dimensions 1, 2, 4 and 8, so dimension five
+has no native multiplication for the quadratic map. What the atlas builds
+instead is a genuine 5-D *point set*: the **julia-family body**
+{(z, t) ∈ ℍ × ℝ : z belongs to the quaternion julia set whose constant
+orbits a small circle as t advances}.
+
+**Mandeljulia 5D** raymarches a 3-D slice of that body with three knobs:
+- **5th dim t** — position along the julia-constant path (Morph travels it).
+- **5D tilt** — couples the fifth coordinate across the view, so a single
+  frame holds a *continuum* of julia sets: connected blobs on one side,
+  dust on the other, whirlpools between.
+- **c-path radius** — how far the constant roams.
+
+Combine with Fly-through (the slice offset) and the slice tilt/basis for
+diagonal flights through the body.
