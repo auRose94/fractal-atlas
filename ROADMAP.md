@@ -11,8 +11,12 @@ The exploration queue for the Fractal Atlas, roughly in build order.
   origami terracing woven through the julia blob.
 - **Ship × Box**: the Burning Ship orbit, refolded — renders a compass-rose
   medallion with a radial-spokes core.
-- Queued hybrids: triple hybrids with per-slot iteration counts
-  (Mandelbulb3D-style formula sequences) and user-editable formula slots.
+- **Sequencer** (shipped): user-editable formula slots — three transform slots
+  (Bulb / Box / per-axis Square / Ship / Tricorn / Mirror), each with its own
+  step count, applied cyclically with derivative tracking. One remix turned
+  into a glassy ice-cube with a carved lens staring out of its face.
+- Queued: preset sharing for sequencer formulas (URL deep-links), more slot
+  types (inversion folds, sine bends).
 
 ## 2. True 4D fly-through — shipped
 - **Fly-through** toggle (drawer, quat modes): continuous travel along the 4-D

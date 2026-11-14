@@ -27,6 +27,9 @@ all in a single file: `index.html` (raw WebGL2, no dependencies, no build step).
   quaternions; braided-rope symmetry.
 - **Rosebulb** — invented for this atlas: the bulb power wobbles with orbit
   azimuth, melting the symmetric lobes into organic caramel drapery.
+- **Sequencer** — compose your own fractal: three formula slots (Bulb, Box,
+  per-axis Square, Ship, Tricorn, Mirror), each with its own step count,
+  applied cyclically. Detail and draw-distance controls live in the drawer.
 - **Fly-through** (drawer, quat modes) — continuous travel through the fourth
   dimension with a speed slider and soft bounce; combine with auto-rotate for
   auto-pilot recordings.

@@ -43,6 +43,10 @@
   .row { margin: 8px 0; }
   .row label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text); margin-bottom: 3px; }
   .row label span { font: 11px ui-monospace, monospace; color: var(--accent); }
+  .seqrow { display: flex; align-items: center; gap: 8px; }
+  .seqrow label { margin: 0; flex: 0 0 44px; }
+  .seqrow select { flex: 1; min-width: 0; }
+  .seqrow input[type=range] { width: 64px; flex: 0 0 auto; }
   input[type=range] { width: 100%; accent-color: var(--accent); height: 18px; cursor: pointer; }
   select {
     width: 100%; padding: 4px 6px; font: 12px system-ui, sans-serif;
@@ -115,6 +119,7 @@
       <option value="9">Rosebulb (angle power)</option>
       <option value="10">KIFS Temple (kaleidoscope)</option>
       <option value="11">Apollonian Foam (infinite)</option>
+      <option value="12">Sequencer (compose your own)</option>
     </select>
   </div>
   <div class="row" id="rowPower"><label>Power <span id="vPower">8.00</span></label><input id="sPower" type="range" min="2" max="12" step="0.05" value="8"></div>
@@ -123,6 +128,39 @@
   <div class="row" id="rowWobble" style="display:none"><label>Angle wobble <span id="vWobble">1.50</span></label><input id="sWobble" type="range" min="0" max="3" step="0.05" value="1.5"></div>
   <div class="row" id="rowRot" style="display:none"><label>Twist per iter <span id="vRot">0.30</span></label><input id="sRot" type="range" min="0" max="1.57" step="0.01" value="0.3"></div>
   <div class="row" id="rowInvert" style="display:none"><label>Inversion k <span id="vInv">1.00</span></label><input id="sInv" type="range" min="0.8" max="1.2" step="0.01" value="1"></div>
+  <div class="row seqrow" id="rowSeq1" style="display:none"><label>Slot 1</label>
+    <select id="selSeq1">
+      <option value="0">Bulb</option>
+      <option value="1">Box</option>
+      <option value="2">Square</option>
+      <option value="3">Ship</option>
+      <option value="4">Tricorn</option>
+      <option value="5">Mirror</option>
+    </select>
+    <input id="sSeqN1" type="range" min="1" max="6" step="1" value="2" title="steps per cycle">
+  </div>
+  <div class="row seqrow" id="rowSeq2" style="display:none"><label>Slot 2</label>
+    <select id="selSeq2">
+      <option value="0">Bulb</option>
+      <option value="1" selected>Box</option>
+      <option value="2">Square</option>
+      <option value="3">Ship</option>
+      <option value="4">Tricorn</option>
+      <option value="5">Mirror</option>
+    </select>
+    <input id="sSeqN2" type="range" min="1" max="6" step="1" value="1" title="steps per cycle">
+  </div>
+  <div class="row seqrow" id="rowSeq3" style="display:none"><label>Slot 3</label>
+    <select id="selSeq3">
+      <option value="0">Bulb</option>
+      <option value="1">Box</option>
+      <option value="2" selected>Square</option>
+      <option value="3">Ship</option>
+      <option value="4">Tricorn</option>
+      <option value="5">Mirror</option>
+    </select>
+    <input id="sSeqN3" type="range" min="1" max="6" step="1" value="2" title="steps per cycle">
+  </div>
   <div class="row" id="rowJulia" style="display:none"><label>Constant c</label>
     <select id="selJC">
       <option value="0">Crane</option>
@@ -208,6 +246,12 @@ uniform float uGlow;
 uniform int   uShadows;
 uniform int   uFractal;    // 0 bulb, 1 box, 2 quaternion julia, 3 mandelbrot 4D slice
 uniform int   uBoxEvery;   // hybrid: inject a mandelbox fold every Nth iteration
+uniform int   uSeqA;       // sequencer slot transforms
+uniform int   uSeqB;
+uniform int   uSeqC;
+uniform int   uSeqNA;      // sequencer per-slot step counts
+uniform int   uSeqNB;
+uniform int   uSeqNC;
 uniform float uScale;      // mandelbox scale / KIFS scale
 uniform float uRotA;       // KIFS twist angle per iteration
 uniform float uInvK;       // Apollonian inversion constant
@@ -423,12 +467,74 @@ float apoDE(vec3 p, out float trap, out float iterF) {
   return max(0.25 * abs(z.y) / scale, 0.0);
 }
 
+// ---------------- sequencer: user-composed formula slots ----------------
+// slots: 0 bulb, 1 box, 2 per-axis square, 3 ship-square, 4 tricorn-square, 5 mirror
+vec3 seqApply(int slot, vec3 z, inout float dr, vec3 p) {
+  if (slot == 0) {
+    float r = max(length(z), 1e-9);
+    float theta = acos(clamp(z.z / r, -1.0, 1.0)) * uPower;
+    float phi = atan(z.y, z.x) * uPower;
+    dr = pow(r, uPower - 1.0) * uPower * dr + 1.0;
+    float zr = pow(r, uPower);
+    z = zr * vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta)) + p;
+  } else if (slot == 1) {
+    z = clamp(z, -1.0, 1.0) * 2.0 - z;
+    float r2 = dot(z, z);
+    float m = clamp(1.0 / max(r2, 0.25), 1.0, 4.0);
+    z *= m;
+    dr *= m;
+    z = uScale * z + p;
+    dr = dr * abs(uScale) + 1.0;
+  } else if (slot == 2) {
+    float g = max(length(z), 0.1);
+    z = z * z + p;
+    dr = dr * 2.0 * g + 1.0;
+  } else if (slot == 3) {
+    z.x = abs(z.x);
+    float g = max(length(z), 0.1);
+    z = z * z + p;
+    dr = dr * 2.0 * g + 1.0;
+  } else if (slot == 4) {
+    z = vec3(z.x, -z.y, -z.z);
+    float g = max(length(z), 0.1);
+    z = z * z + p;
+    dr = dr * 2.0 * g + 1.0;
+  } else {
+    z = 2.0 * clamp(z, -1.0, 1.0) - z;   // mirror isometry: derivative unchanged
+  }
+  return z;
+}
+
+float seqDE(vec3 p, out float trap, out float iterF) {
+  vec3 z = p;
+  float dr = 1.0;
+  float r = length(z);
+  trap = 1e9;
+  int cycle = uSeqNA + uSeqNB + uSeqNC;
+  if (cycle < 1) cycle = 1;
+  int i;
+  for (i = 0; i < 64; i++) {
+    if (i >= uIters) break;
+    r = length(z);
+    if (r > BAIL) break;
+    trap = min(trap, r);
+    int k = i % cycle;
+    int slot = (k < uSeqNA) ? uSeqA : ((k < uSeqNA + uSeqNB) ? uSeqB : uSeqC);
+    z = seqApply(slot, z, dr, p);
+    if (dr > 1e12) break;
+  }
+  iterF = float(i);
+  r = max(length(z), 1e-9);
+  return max(0.5 * log(r) * r / max(dr, 1e-9), 0.0);
+}
+
 // ---------------- dispatch ----------------
 float mapDE(vec3 p, out float trap, out float iterF) {
   if (uFractal == 1) return boxDE(p, trap, iterF);
   if (uFractal == 5) return hybridDE(p, trap, iterF);
   if (uFractal == 10) return kifsDE(p, trap, iterF);
   if (uFractal == 11) return apoDE(p, trap, iterF);
+  if (uFractal == 12) return seqDE(p, trap, iterF);
   if (uFractal == 2 || uFractal == 3 || uFractal == 4) return quatDE(p, trap, iterF);
   return bulbDE(p, trap, iterF);
 }
@@ -662,12 +768,12 @@ if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { fail('Program link error:\n
 gl.useProgram(prog);
 gl.bindVertexArray(gl.createVertexArray());
 
-const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uAmp','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uRotA','uInvK','uBoxEvery','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
+const UNIFORMS = ['uRes','uTime','uCamPos','uCamTarget','uPower','uAmp','uIters','uDetail','uPalette','uColorMode','uGlow','uShadows','uFractal','uScale','uRotA','uInvK','uBoxEvery','uSeqA','uSeqB','uSeqC','uSeqNA','uSeqNB','uSeqNC','uCQuat','uSliceH','uSliceN','uSliceE1','uSliceE2','uSliceE3','uBound','uSceneScale','uFogK','uClipOn','uClipD','uCenter'];
 const U = {};
 for (const n of UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
 
 // ---------------------------------------------------------------- state
-const TITLES = ['MANDELBULB', 'MANDELBOX', 'QUATERNION JULIA', 'MANDELBROT 4D', 'BURNING SHIP 4D', 'HYBRID BULB × BOX', 'JULIA × BOX', 'SHIP × BOX', 'TRICORN 4D', 'ROSEBULB', 'KIFS TEMPLE', 'APOLLONIAN FOAM'];
+const TITLES = ['MANDELBULB', 'MANDELBOX', 'QUATERNION JULIA', 'MANDELBROT 4D', 'BURNING SHIP 4D', 'HYBRID BULB × BOX', 'JULIA × BOX', 'SHIP × BOX', 'TRICORN 4D', 'ROSEBULB', 'KIFS TEMPLE', 'APOLLONIAN FOAM', 'SEQUENCER'];
 const FORMULAS = [
   'z → zⁿ + c \u00a0·\u00a0 the classic 3-D power extension',
   'box-fold → sphere-fold → scale \u00a0·\u00a0 architecture from a map',
@@ -680,7 +786,8 @@ const FORMULAS = [
   'z → z̄² + c \u00a0·\u00a0 the tricorn, four dimensions deep',
   'z → z^p(θ) + c \u00a0·\u00a0 the power wobbles with orbit angle',
   'fold → sort → twist → scale \u00a0·\u00a0 kaleidoscopic IFS',
-  'tile fold → sphere inversion \u00a0·\u00a0 infinite apollonian foam'
+  'tile fold → sphere inversion \u00a0·\u00a0 infinite apollonian foam',
+  'your formula, three slots \u00a0·\u00a0 compose your own fractal'
 ];
 const HOMES = [
   { yaw: 0.65, pitch: 0.30, dist: 3.1 },
@@ -694,7 +801,8 @@ const HOMES = [
   { yaw: 0.65, pitch: 0.30, dist: 3.4 },
   { yaw: 0.55, pitch: 0.30, dist: 3.2 },
   { yaw: 0.60, pitch: 0.35, dist: 3.2 },
-  { yaw: 0.60, pitch: 0.20, dist: 2.9 }
+  { yaw: 0.60, pitch: 0.20, dist: 2.9 },
+  { yaw: 0.65, pitch: 0.30, dist: 3.4 }
 ];
 const JULIA_C = [
   [-0.2,  0.6,  0.2,  0.2 ],   // Crane
@@ -712,6 +820,7 @@ const S = {
   cutaway: false, clipFrac: 0.55, center: [0, 0, 0],
   amp: 1.5, fly: false, flySpeed: 0.12, flyDir: 1,
   rotA: 0.30, invK: 1.0, renderDist: 1.0,
+  seqA: 0, seqB: 1, seqC: 2, seqNA: 2, seqNB: 1, seqNC: 2,
   shadows: true, autoRes: true, autoRot: true, morph: false,
   yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist,
   tx: 0, ty: 0, tz: 0,
@@ -723,11 +832,11 @@ const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // ---------------------------------------------------------------- UI wiring
 function bindSlider(id, labelId, key, fmt, onSet) {
-  const el = $(id), lab = $(labelId);
+  const el = $(id), lab = labelId ? $(labelId) : null;
   el.addEventListener('input', () => {
     const v = parseFloat(el.value);
     S[key] = v;
-    lab.textContent = typeof fmt === 'function' ? fmt(v) : v;
+    if (lab) lab.textContent = typeof fmt === 'function' ? fmt(v) : v;
     if (onSet) onSet(v);
   });
   return el;
@@ -740,6 +849,9 @@ const sFly = bindSlider('sFly', 'vFly', 'flySpeed', v => v.toFixed(2));
 const sRot = bindSlider('sRot', 'vRot', 'rotA', v => v.toFixed(2));
 const sInv = bindSlider('sInv', 'vInv', 'invK', v => v.toFixed(2));
 const sRender = bindSlider('sRender', 'vRender', 'renderDist', v => v.toFixed(1));
+const sSeqN1 = bindSlider('sSeqN1', null, 'seqNA', v => String(v | 0));
+const sSeqN2 = bindSlider('sSeqN2', null, 'seqNB', v => String(v | 0));
+const sSeqN3 = bindSlider('sSeqN3', null, 'seqNC', v => String(v | 0));
 const sSlice = bindSlider('sSlice', 'vSlice', 'sliceH', v => v.toFixed(2), () => setMorph(false));
 const sTilt  = bindSlider('sTilt',  'vTilt',  'sliceTilt', v => v.toFixed(2));
 const sAzim  = bindSlider('sAzim',  'vAzim',  'sliceAzim', v => v.toFixed(2));
@@ -751,6 +863,9 @@ bindSlider('sGlow', 'vGlow', 'glow', v => v.toFixed(2));
 
 $('selFrac').addEventListener('change', e => setFractal(e.target.value | 0));
 $('selJC').addEventListener('change', e => S.juliaPreset = e.target.value | 0);
+$('selSeq1').addEventListener('change', e => S.seqA = e.target.value | 0);
+$('selSeq2').addEventListener('change', e => S.seqB = e.target.value | 0);
+$('selSeq3').addEventListener('change', e => S.seqC = e.target.value | 0);
 $('selPal').addEventListener('change', e => S.palette = e.target.value | 0);
 $('selMode').addEventListener('change', e => S.colorMode = e.target.value | 0);
 $('cbRot').addEventListener('change', e => S.autoRot = e.target.checked);
@@ -779,13 +894,17 @@ function refreshHeader() {
 const isQuat = f => (f === 2 || f === 3 || f === 4 || f === 6 || f === 7 || f === 8);
 
 function updateRows() {
-  $('rowPower').style.display = (S.fractal === 0 || S.fractal === 5 || S.fractal === 9) ? '' : 'none';
-  $('rowScale').style.display = (S.fractal === 1 || S.fractal === 5 || S.fractal === 6 || S.fractal === 7 || S.fractal === 10) ? '' : 'none';
+  $('rowPower').style.display = (S.fractal === 0 || S.fractal === 5 || S.fractal === 9 || S.fractal === 12) ? '' : 'none';
+  $('rowScale').style.display = (S.fractal === 1 || S.fractal === 5 || S.fractal === 6 || S.fractal === 7 || S.fractal === 10 || S.fractal === 12) ? '' : 'none';
   $('rowBoxN').style.display = (S.fractal === 5 || S.fractal === 6 || S.fractal === 7) ? '' : 'none';
   $('rowWobble').style.display = S.fractal === 9 ? '' : 'none';
   $('rowRot').style.display = S.fractal === 10 ? '' : 'none';
   $('rowInvert').style.display = S.fractal === 11 ? '' : 'none';
   $('rowJulia').style.display = (S.fractal === 2 || S.fractal === 6) ? '' : 'none';
+  const seqMode = S.fractal === 12;
+  for (const id of ['rowSeq1', 'rowSeq2', 'rowSeq3']) {
+    $(id).style.display = seqMode ? '' : 'none';
+  }
   const quatMode = isQuat(S.fractal);
   for (const id of ['rowAzim', 'rowElev', 'rowTilt', 'rowSlice', 'rowFly', 'rowFlySpeed']) {
     $(id).style.display = quatMode ? '' : 'none';
@@ -802,7 +921,7 @@ function syncSliceUI() {
 
 function setFractal(f) {
   S.fractal = f;
-  const iters = { 0: 14, 1: 16, 2: 12, 3: 14, 4: 14, 5: 14, 6: 12, 7: 14, 8: 14, 9: 14, 10: 12, 11: 8 }[f];
+  const iters = { 0: 14, 1: 16, 2: 12, 3: 14, 4: 14, 5: 14, 6: 12, 7: 14, 8: 14, 9: 14, 10: 12, 11: 8, 12: 15 }[f];
   S.iters = iters; sIters.value = iters; $('vIters').textContent = String(iters);
   S.sliceH = 0; S.sliceTilt = 0; S.sliceAzim = 0; S.sliceElev = 0;
   syncSliceUI();
@@ -995,6 +1114,10 @@ function baseParams() {
     const bound = (S.fractal === 10) ? 2.4 : 3.5;
     return { bound, scene: home.dist / 3.1, fog: 0.015 * Math.pow(3.1 / home.dist, 2) };
   }
+  if (S.fractal === 12) {
+    const home = HOMES[12];
+    return { bound: 3.2, scene: home.dist / 3.1, fog: 0.015 * Math.pow(3.1 / home.dist, 2) };
+  }
   const bound = (S.fractal === 0 || S.fractal === 9) ? 1.5 : 2.3;
   const home = HOMES[S.fractal];
   return { bound, scene: home.dist / 3.1, fog: 0.015 * Math.pow(3.1 / home.dist, 2) };
@@ -1026,7 +1149,7 @@ function frame(now) {
   if (S.autoRot && !dragging) S.yaw += dt * 0.15;
   if (S.morph) {
     const t = now * 0.00035;
-    if (S.fractal === 0 || S.fractal === 9) {
+    if (S.fractal === 0 || S.fractal === 9 || S.fractal === 12) {
       S.power = 6 + 4 * Math.sin(t);
       sPower.value = S.power;
       $('vPower').textContent = S.power.toFixed(2);
@@ -1111,6 +1234,12 @@ function frame(now) {
   gl.uniform1f(U.uRotA, S.rotA);
   gl.uniform1f(U.uInvK, S.invK);
   gl.uniform1i(U.uBoxEvery, S.boxEvery | 0);
+  gl.uniform1i(U.uSeqA, S.seqA);
+  gl.uniform1i(U.uSeqB, S.seqB);
+  gl.uniform1i(U.uSeqC, S.seqC);
+  gl.uniform1i(U.uSeqNA, Math.round(S.seqNA));
+  gl.uniform1i(U.uSeqNB, Math.round(S.seqNB));
+  gl.uniform1i(U.uSeqNC, Math.round(S.seqNC));
   gl.uniform4f(U.uCQuat, S.cQuat[0], S.cQuat[1], S.cQuat[2], S.cQuat[3]);
   const [sN, sE1, sE2, sE3] = sliceBasis(S.cTilt, S.cAzim, S.cElev);
   gl.uniform1f(U.uSliceH, S.cH);
