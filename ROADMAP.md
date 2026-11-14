@@ -45,8 +45,12 @@ The exploration queue for the Fractal Atlas, roughly in build order.
   (Inigo Quilez's exact DE): an infinite plain of iridescent foam with golden
   dome-temples at every tile. The Inversion k slider tunes the packing; the
   dark "wells" are real — inversion centers that go to infinity.
-- Still queued: **Kleinian gasket** — Schottky-group limit sets via circle
-  inversions; the one kernel that needs its own dedicated tuning session.
+- **Kleinian Pearls** (shipped) — a Schottky group of three mutually tangent
+  sphere inversions, orbit-folded with conformal scale accumulation. The
+  limit structure accumulates *inside* the generator spheres, so enable the
+  **Cutaway** to expose the interior: nested pearl rings, limit-point "pupils"
+  and violet strata. Future refinement: the classical flat gasket via
+  Descartes-sector DEs.
 
 ## 4. 5D — deliberately last
 The 4-D modes are slices of 4-D sets; the 5-D body is the *family of all such

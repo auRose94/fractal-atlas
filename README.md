@@ -33,6 +33,10 @@ all in a single file: `index.html` (raw WebGL2, no dependencies, no build step).
   Every state — formula, camera, palette — serializes into the URL: **Copy
   link** gives you a shareable deep-link to any creature. Detail and
   draw-distance controls live in the drawer.
+- **Kleinian Pearls** — a Schottky group of three mutually tangent sphere
+  inversions, orbit-folded. The limit structure hides inside the generator
+  spheres: enable **Cutaway** (~depth 0.9) to expose the pearl rings and
+  limit-point pupils.
 - **Fly-through** (drawer, quat modes) — continuous travel through the fourth
   dimension with a speed slider and soft bounce; combine with auto-rotate for
   auto-pilot recordings.
