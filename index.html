@@ -133,7 +133,7 @@
     </select>
   </div>
   <div class="row"><label>Iterations <span id="vIters">14</span></label><input id="sIters" type="range" min="4" max="48" step="1" value="14"></div>
-  <div class="row"><label>Detail <span id="vDetail">1.00</span></label><input id="sDetail" type="range" min="0.5" max="2" step="0.05" value="1"></div>
+  <div class="row"><label>Detail <span id="vDetail">1.00</span></label><input id="sDetail" type="range" min="0.5" max="4" step="0.05" value="1"></div>
   <div class="row"><label>Glow <span id="vGlow">0.35</span></label><input id="sGlow" type="range" min="0" max="1" step="0.02" value="0.35"></div>
   <div class="row"><label>Palette</label>
     <select id="selPal">
@@ -175,6 +175,7 @@
         <label><input type="checkbox" id="cbCut"> Cutaway</label>
       </div>
       <div class="row"><label>Cut plane depth ×view <span id="vCut">0.55</span></label><input id="sCut" type="range" min="0.02" max="1.5" step="0.01" value="0.55"></div>
+      <div class="row"><label>Draw distance ×<span id="vRender">1.0</span></label><input id="sRender" type="range" min="1" max="8" step="0.1" value="1"></div>
     </div>
   </div>
   <footer>distance-estimated raymarcher · single file · no dependencies</footer>
@@ -710,7 +711,7 @@ const S = {
   scale: -1.5, boxEvery: 2, juliaPreset: 0, sliceH: 0, sliceTilt: 0, sliceAzim: 0, sliceElev: 0,
   cutaway: false, clipFrac: 0.55, center: [0, 0, 0],
   amp: 1.5, fly: false, flySpeed: 0.12, flyDir: 1,
-  rotA: 0.30, invK: 1.0,
+  rotA: 0.30, invK: 1.0, renderDist: 1.0,
   shadows: true, autoRes: true, autoRot: true, morph: false,
   yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist,
   tx: 0, ty: 0, tz: 0,
@@ -738,6 +739,7 @@ const sWobble = bindSlider('sWobble', 'vWobble', 'amp', v => v.toFixed(2));
 const sFly = bindSlider('sFly', 'vFly', 'flySpeed', v => v.toFixed(2));
 const sRot = bindSlider('sRot', 'vRot', 'rotA', v => v.toFixed(2));
 const sInv = bindSlider('sInv', 'vInv', 'invK', v => v.toFixed(2));
+const sRender = bindSlider('sRender', 'vRender', 'renderDist', v => v.toFixed(1));
 const sSlice = bindSlider('sSlice', 'vSlice', 'sliceH', v => v.toFixed(2), () => setMorph(false));
 const sTilt  = bindSlider('sTilt',  'vTilt',  'sliceTilt', v => v.toFixed(2));
 const sAzim  = bindSlider('sAzim',  'vAzim',  'sliceAzim', v => v.toFixed(2));
@@ -861,7 +863,7 @@ canvas.addEventListener('pointermove', e => {
   if (pointers.size === 2) {
     const p = [...pointers.values()];
     const span = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
-    if (lastSpan > 0 && span > 0) S.dist = clampN(S.dist * (lastSpan / span), 1.05, 40);
+    if (lastSpan > 0 && span > 0) S.dist = clampN(S.dist * (lastSpan / span), 1.05, 60);
     lastSpan = span;
     return;
   }
@@ -907,7 +909,7 @@ canvas.addEventListener('wheel', e => {
     syncSliceUI();
     return;
   }
-  S.dist = clampN(S.dist * Math.exp(e.deltaY * 0.0012), 1.05, 40);
+  S.dist = clampN(S.dist * Math.exp(e.deltaY * 0.0012), 1.05, 60);
 }, { passive: false });
 
 canvas.addEventListener('dblclick', resetView);
@@ -965,6 +967,17 @@ function sliceBasis(tilt, azim, elev) {
   return [n, bs[0], bs[1], bs[2]];
 }
 function typeParams() {
+  // draw distance: the bounding sphere scales up and fog reach scales with
+  // its square, so far geometry stays crisp instead of fading out
+  const base = baseParams();
+  return {
+    bound: base.bound * S.renderDist,
+    scene: base.scene,
+    fog: base.fog / (S.renderDist * S.renderDist)
+  };
+}
+
+function baseParams() {
   if (S.fractal === 1) {
     const bound = Math.max(boxBound(S.scale), boxBound(S.cscale));
     return { bound, scene: HOMES[1].dist / 3.1, fog: 0.015 * Math.pow(3.1 / HOMES[1].dist, 2) };
