@@ -37,6 +37,10 @@ all in a single file: `index.html` (raw WebGL2, no dependencies, no build step).
   inversions, orbit-folded. The limit structure hides inside the generator
   spheres: enable **Cutaway** (~depth 0.9) to expose the pearl rings and
   limit-point pupils.
+- **Menger Sponge** — the classic mod-fold sponge, rosette-carved by trap coloring.
+- **Sierpiński Tetra** — the tetrahedral gasket; Scale slider runs the generalized family.
+- **Newton 3D** — basins of z³ − 1 in quaternion space as a fractal relief landscape.
+- **Weierstrass Terrain** — mountain-scapes from Σ αⁿ cos(βⁿπx); Roughness, Frequency, LOD.
 - **Mandeljulia 5D** — the finale: a genuine 5-D body (the family of
   quaternion julia sets whose constant orbits a path as a fifth coordinate
   advances), raymarched as a tiltable 3-D slice. Morph flies the fifth axis.

@@ -52,6 +52,27 @@ The exploration queue for the Fractal Atlas, roughly in build order.
   and violet strata. Future refinement: the classical flat gasket via
   Descartes-sector DEs.
 
+## 3b. The classics expansion pack — shipped
+Requested by Rose's husband (who keeps asking for more, bless him):
+- **Menger Sponge** — Quilez's exact mod-fold DE; orbit-trap rosettes carve every cell.
+- **Sierpiński Tetra** — the tetrahedral gasket via three plane folds; the Scale
+  slider runs the generalized family (Morph breathes it).
+- **Newton 3D** — basins of z³ − 1 in quaternion space, rendered as a fractal
+  *relief*: the post-Newton residual as altitude. Gold convergence plains,
+  the boundary rising as lace towers. Relief height slider; iterations add
+  boundary detail.
+- **Weierstrass Terrain** — Σ αⁿ cos(βⁿπx) mountain-scapes: rotated ridged
+  octaves, Roughness/Frequency sliders, LOD octave cutoff, elevation coloring.
+  Safety-factor marching (gradient-normalized DE collapses under fractal
+  gradients). Morph breathes the roughness.
+
+## 3c. Curve-fractals batch — queued
+Zero-thickness curves can't be sphere-traced directly, so these arrive as
+*filled IFS tiles* (the solids their curves bound):
+- **Dragon curve** — the twin-dragon tile: two-map IFS (rotate ±90°, scale 1/√2)
+- **Koch snowflake** — the Koch island interior: 7-map IFS; 3-D Koch surfaces
+- **Fibonacci word fractal** — as a 2.5-D extruded tiling
+
 ## 4. 5D — shipped (the finale)
 There is no canonical "5-D Mandelbrot set": by the Hurwitz theorem, normed
 division algebras only exist in dimensions 1, 2, 4 and 8, so dimension five
